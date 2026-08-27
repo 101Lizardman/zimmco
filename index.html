@@ -144,7 +144,23 @@
     padding:6px 0;
   }
   .pricecard span{ color:var(--secondary); }
-  .coinslot{ flex:none; opacity:.9; }
+
+  .coin-btn{
+    all:unset;
+    flex:none;
+    display:inline-flex;
+    cursor:pointer;
+    border-radius:8px;
+    transition: transform .1s ease, filter .12s ease;
+  }
+  .coin-btn:hover{ filter:brightness(1.2); }
+  .coin-btn:active{ transform: translateY(1px) scale(.95); }
+  .coin-btn:focus-visible{ outline:2px solid var(--secondary); outline-offset:3px; }
+  .coin-btn:disabled{ cursor:not-allowed; filter:none; opacity:.55; }
+  .coinslot{ display:block; }
+  .coinslot.is-inserting{ animation: coin-pulse .5s ease; }
+  @keyframes coin-pulse{ 0%{ filter:brightness(1); } 35%{ filter:brightness(1.7); } 100%{ filter:brightness(1); } }
+  @media (prefers-reduced-motion: reduce){ .coinslot.is-inserting{ animation:none; } }
 
   .cabinet__tray{
     margin-top:12px;
@@ -229,12 +245,22 @@
       </div>
     </div>
     <div class="pricecard">
-      <svg class="coinslot" width="46" height="22" viewBox="0 0 46 22" aria-hidden="true" focusable="false">
-        <rect x="1" y="1" width="34" height="20" rx="4" fill="#000000" stroke="rgba(255,255,255,.22)" stroke-width="1"/>
-        <rect x="9" y="9" width="18" height="4" rx="2" fill="#000000" stroke="rgba(0,0,0,.6)"/>
-        <rect x="37" y="5" width="7" height="12" rx="1.5" fill="#04070b" stroke="rgba(255,255,255,.22)" stroke-width="1"/>
-        <line x1="38.2" y1="11" x2="42.8" y2="11" stroke="rgba(255,255,255,.28)" stroke-width="1"/>
-      </svg>
+      <button type="button" class="coin-btn" id="coinSlot" aria-label="Insert coin">
+        <svg class="coinslot" width="58" height="26" viewBox="0 0 58 26" aria-hidden="true" focusable="false">
+          <defs>
+            <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="rgba(255,255,255,.20)"/>
+              <stop offset=".18" stop-color="rgba(255,255,255,.05)"/>
+              <stop offset="1" stop-color="rgba(0,0,0,.35)"/>
+            </linearGradient>
+          </defs>
+          <rect x="1" y="1" width="40" height="24" rx="5" fill="url(#plate)" stroke="rgba(255,255,255,.28)" stroke-width="1"/>
+          <polygon points="21,5.5 25,5.5 23,9" fill="var(--secondary)" opacity=".6"/>
+          <rect x="10" y="12" width="22" height="4" rx="2" fill="#000000" stroke="rgba(0,0,0,.8)" transform="rotate(-13 21 14)"/>
+          <rect x="46" y="5" width="9" height="16" rx="2" fill="#04070b" stroke="rgba(255,255,255,.28)" stroke-width="1"/>
+          <line x1="47.5" y1="13" x2="53.5" y2="13" stroke="rgba(255,255,255,.32)" stroke-width="1"/>
+        </svg>
+      </button>
       Select A Flavour · <span>25¢</span>
     </div>
 
@@ -388,13 +414,42 @@
       '<div class="led-row"><span class="k">Status</span><span class="status-pill '+machine.status+'">'+statusLabel(machine.status)+'</span></div>';
   }
 
+  // Coin gate: player must press the coin slot before the pad will vend.
+  // "idle" -> press coin slot -> "arming" (coin-drop sound, pad stays dim)
+  // -> after 500ms -> "armed" (pad brightens) -> a flavour is pressed -> vends -> back to "idle".
+  var coinState = "idle";
+
+  function renderCoinSlot(){
+    var btn = document.getElementById("coinSlot");
+    var locked = machine.status==="lockdown";
+    var empty = machine.stores<=0;
+    btn.disabled = locked || empty || coinState!=="idle";
+  }
+
+  function insertCoin(){
+    if(coinState!=="idle" || machine.status==="lockdown" || machine.stores<=0) return;
+    coinState = "arming";
+    renderCoinSlot();
+    if(soundEnabled) playCoinDrop();
+    var slot = document.querySelector(".coinslot");
+    slot.classList.remove("is-inserting");
+    void slot.offsetWidth; // restart the animation
+    slot.classList.add("is-inserting");
+    window.setTimeout(function(){
+      coinState = "armed";
+      renderCoinSlot();
+      renderPad();
+    }, 500);
+  }
+
   function renderPad(){
     var pad = document.getElementById("selectionPad");
     var locked = machine.status==="lockdown";
     var empty = machine.stores<=0;
+    var armed = coinState==="armed";
     pad.innerHTML = availableBeverages(machine.range).map(function(b){
       var badge = b.range==="all" ? "All" : b.range==="classic" ? "Classic" : b.range==="zimmka" ? "Zimmka!" : "Rare";
-      return '<button class="pad-btn" type="button" data-id="'+b.id+'" title="'+esc(b.flavor)+'"'+((locked||empty)?' disabled':'')+'>'+
+      return '<button class="pad-btn" type="button" data-id="'+b.id+'" title="'+esc(b.flavor)+'"'+((locked||empty||!armed)?' disabled':'')+'>'+
         '<span class="pad-btn__code">'+b.code+'</span>'+
         '<span class="pad-btn__name">'+esc(b.name)+'</span>'+
         '<span class="pad-btn__badge">'+badge+'</span>'+
@@ -403,7 +458,7 @@
   }
 
   function dispense(bev){
-    if(machine.status==="lockdown" || machine.stores<=0) return;
+    if(coinState!=="armed" || machine.status==="lockdown" || machine.stores<=0) return;
     machine.stores -= 1;
     var tray = document.getElementById("dispenseTray");
     tray.innerHTML =
@@ -411,12 +466,11 @@
         '<span class="can-dot">'+bev.code+'</span>'+
         '<span><span class="can-name">'+esc(bev.name)+'</span><br><span class="can-effect">'+esc(bev.effect)+'</span></span>'+
       '</div>';
+    coinState = "idle";
     renderLED();
     renderPad();
-    if(soundEnabled){
-      playCoinDrop();
-      window.setTimeout(function(){ playVoiceLine(bev.id); }, 260);
-    }
+    renderCoinSlot();
+    if(soundEnabled) playVoiceLine(bev.id);
   }
 
   // ---- wire up ----
@@ -425,10 +479,13 @@
     if(!btn || btn.disabled) return;
     dispense(BEVERAGES.find(function(b){ return b.id===btn.dataset.id; }));
   });
+  document.getElementById("coinSlot").addEventListener("click", insertCoin);
   document.getElementById("btnNewUnit").addEventListener("click", function(){
     newMachine();
+    coinState = "idle";
     renderLED();
     renderPad();
+    renderCoinSlot();
   });
   document.getElementById("btnSound").addEventListener("click", function(){
     soundEnabled = !soundEnabled;
@@ -441,5 +498,6 @@
   newMachine();
   renderLED();
   renderPad();
+  renderCoinSlot();
 })();
 </script>
