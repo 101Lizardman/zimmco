@@ -253,10 +253,13 @@
 
   /* the can is simulated with real JS physics (gravity + bounce + drag),
      positioned in a full-page fixed layer so it can fall past the opening
-     and off the bottom of the page — see spawnCanPhysics() below */
+     and off the bottom of the page — see spawnCanPhysics() below.
+     Deliberately no z-index here: each can sets its own (behind the
+     cabinet while still "inside" it, in front once it reaches the
+     opening) so it reads as falling out of the slot, not over the face
+     of the machine. */
   .can-layer{
     position:fixed; inset:0;
-    z-index:15;
     pointer-events:none;
     overflow:visible;
   }
@@ -709,6 +712,7 @@
    * ------------------------------------------------------------------- */
   var GRAVITY = 2200;       // px/s^2
   var RESTITUTION = 0.45;
+  var TIME_SCALE = 0.5;     // slows the whole simulation down to ~half speed
   var CAN_W = 26, CAN_H = 58;
   var cans = [];
   var physicsRAF = null;
@@ -717,6 +721,14 @@
 
   function applyCanTransform(b){
     b.el.style.transform = "translate("+b.x+"px,"+b.y+"px) rotate("+b.rot+"deg)";
+  }
+
+  // Behind the cabinet's face while still "inside" it, in front once it
+  // reaches the opening — reads as falling out of the slot rather than
+  // dropping down over the whole machine. Never re-hides once revealed.
+  function updateCanReveal(b){
+    if(!b.revealed && (b.y + CAN_H) >= b.revealY) b.revealed = true;
+    b.el.style.zIndex = b.revealed ? "12" : "-1";
   }
 
   function removeCan(body){
@@ -737,10 +749,11 @@
     for(var i=cans.length-1; i>=0; i--){
       var b = cans[i];
       if(!b.dragging){
-        b.vy += GRAVITY * dt;
-        b.x += b.vx * dt;
-        b.y += b.vy * dt;
-        b.rot += b.vrot * dt;
+        var sdt = dt * TIME_SCALE;
+        b.vy += GRAVITY * sdt;
+        b.x += b.vx * sdt;
+        b.y += b.vy * sdt;
+        b.rot += b.vrot * sdt;
 
         if(!b.bounced && b.y >= b.floorY){
           b.y = b.floorY;
@@ -749,6 +762,7 @@
           b.vrot *= 0.5;
           b.bounced = true;
         }
+        updateCanReveal(b);
         applyCanTransform(b);
       }
     }
@@ -762,6 +776,8 @@
     el.addEventListener("pointerdown", function(e){
       body.dragging = true;
       body.bounced = true;
+      body.revealed = true;
+      el.style.zIndex = "12";
       try{ el.setPointerCapture(e.pointerId); }catch(err){}
       offsetX = e.clientX - body.x;
       offsetY = e.clientY - body.y;
@@ -809,10 +825,13 @@
       rot: reduceMotion ? 0 : (Math.random() * 360 - 180),
       vrot: reduceMotion ? 0 : (Math.random() * 240 - 120),
       floorY: floorY,
+      revealY: openingRect.top,
+      revealed: reduceMotion,
       bounced: reduceMotion,
       dragging: false
     };
     cans.push(body);
+    updateCanReveal(body);
     applyCanTransform(body);
     wireCanDrag(body);
 
