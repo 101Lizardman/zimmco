@@ -251,26 +251,29 @@
   }
   .dispenser__caption .n{ color:var(--secondary); }
 
+  /* the can is simulated with real JS physics (gravity + bounce + drag),
+     positioned in a full-page fixed layer so it can fall past the opening
+     and off the bottom of the page — see spawnCanPhysics() below */
+  .can-layer{
+    position:fixed; inset:0;
+    z-index:15;
+    pointer-events:none;
+    overflow:visible;
+  }
   .can{
-    position:absolute; bottom:6px; left:50%; width:26px; height:58px; margin-left:-13px;
+    position:absolute; top:0; left:0; width:26px; height:58px;
     border-radius:3px 3px 6px 6px;
     background: linear-gradient(180deg, var(--secondary), var(--secondary-shade));
     box-shadow: 0 4px 10px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.18);
     display:flex; align-items:center; justify-content:center;
     font-family:'IBM Plex Mono', monospace; font-size:9px; font-weight:600; color:var(--black);
-    animation: can-drop .9s ease both;
+    pointer-events:auto;
+    cursor:grab;
+    touch-action:none;
+    user-select:none;
+    will-change:transform;
   }
-  @keyframes can-drop{
-    0%{ transform:translateY(-72px) rotate(-8deg); opacity:0; }
-    10%{ opacity:1; }
-    50%{ transform:translateY(0) rotate(3deg); }
-    60%{ transform:translateY(-16px) rotate(-3deg); }
-    72%{ transform:translateY(0) rotate(2deg); }
-    80%{ transform:translateY(-6px) rotate(-1deg); }
-    90%{ transform:translateY(0) rotate(1deg); }
-    100%{ transform:translateY(0) rotate(0deg); }
-  }
-  @media (prefers-reduced-motion: reduce){ .can{ animation:none; } }
+  .can:active{ cursor:grabbing; }
 
   .cabinet__controls{
     width:100%; max-width:420px; margin:12px auto 0;
@@ -411,6 +414,8 @@
     </div>
   </div>
 </div>
+
+<div class="can-layer" id="canLayer" aria-hidden="true"></div>
 
 <footer>
   ZimmCo Refreshment Beverages — a Mothership RPG prop, written by Shane Vincent. Based on the Mothership® Sci-Fi Horror Role Playing Game, published by Tuesday Knight Games, under license. MOTHERSHIP® is a registered trademark of Tuesday Knight Games. tuesdayknightgames.com
@@ -599,8 +604,8 @@
       rangeLabel: rr.label,
       status: durability===0 ? "lockdown" : "operational"
     };
-    document.getElementById("dispenserOpening").innerHTML = "";
     document.getElementById("dispenseCaption").textContent = "— nothing dispensed yet —";
+    clearAllCans();
     latchClicks = 0;
     latchLocked = false;
     document.getElementById("coinLatch").disabled = false;
@@ -694,15 +699,132 @@
     }).join("");
   }
 
+  /* ---------------------------------------------------------------------
+   * Can physics
+   * A dispensed can starts hidden above the opening (inside the cabinet)
+   * at a random angle, free-falls under gravity, bounces once off the
+   * floor of the opening, then keeps falling through and off the bottom
+   * of the page. It can be grabbed and dragged with the mouse/touch at
+   * any point; releasing it lets it carry on falling. Removed after 15s.
+   * ------------------------------------------------------------------- */
+  var GRAVITY = 2200;       // px/s^2
+  var RESTITUTION = 0.45;
+  var CAN_W = 26, CAN_H = 58;
+  var cans = [];
+  var physicsRAF = null;
+  var physicsLastT = null;
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function applyCanTransform(b){
+    b.el.style.transform = "translate("+b.x+"px,"+b.y+"px) rotate("+b.rot+"deg)";
+  }
+
+  function removeCan(body){
+    var idx = cans.indexOf(body);
+    if(idx > -1) cans.splice(idx, 1);
+    if(body.el.parentNode) body.el.parentNode.removeChild(body.el);
+  }
+
+  function clearAllCans(){
+    cans.slice().forEach(removeCan);
+  }
+
+  function stepPhysics(t){
+    if(physicsLastT===null) physicsLastT = t;
+    var dt = Math.min((t - physicsLastT) / 1000, 0.032);
+    physicsLastT = t;
+
+    for(var i=cans.length-1; i>=0; i--){
+      var b = cans[i];
+      if(!b.dragging){
+        b.vy += GRAVITY * dt;
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+        b.rot += b.vrot * dt;
+
+        if(!b.bounced && b.y >= b.floorY){
+          b.y = b.floorY;
+          b.vy = -Math.abs(b.vy) * RESTITUTION - 90;
+          b.vx += (Math.random() * 100 - 50);
+          b.vrot *= 0.5;
+          b.bounced = true;
+        }
+        applyCanTransform(b);
+      }
+    }
+
+    physicsRAF = cans.length ? requestAnimationFrame(stepPhysics) : (physicsLastT = null, null);
+  }
+
+  function wireCanDrag(body){
+    var el = body.el;
+    var offsetX = 0, offsetY = 0, lastPX = 0, lastPY = 0, lastPT = 0;
+    el.addEventListener("pointerdown", function(e){
+      body.dragging = true;
+      body.bounced = true;
+      try{ el.setPointerCapture(e.pointerId); }catch(err){}
+      offsetX = e.clientX - body.x;
+      offsetY = e.clientY - body.y;
+      lastPX = e.clientX; lastPY = e.clientY; lastPT = performance.now();
+      body.vx = 0; body.vy = 0; body.vrot = 0;
+    });
+    el.addEventListener("pointermove", function(e){
+      if(!body.dragging) return;
+      var now = performance.now();
+      var dt = Math.max((now - lastPT) / 1000, 0.001);
+      body.vx = (e.clientX - lastPX) / dt;
+      body.vy = (e.clientY - lastPY) / dt;
+      body.x = e.clientX - offsetX;
+      body.y = e.clientY - offsetY;
+      lastPX = e.clientX; lastPY = e.clientY; lastPT = now;
+      applyCanTransform(body);
+    });
+    function endDrag(){
+      if(!body.dragging) return;
+      body.dragging = false;
+      body.vx = Math.max(-1200, Math.min(1200, body.vx || 0));
+      body.vy = Math.max(-1600, Math.min(1600, body.vy || 0));
+      if(physicsRAF===null){ physicsLastT = null; physicsRAF = requestAnimationFrame(stepPhysics); }
+    }
+    el.addEventListener("pointerup", endDrag);
+    el.addEventListener("pointercancel", endDrag);
+  }
+
+  function spawnCanPhysics(bev){
+    var openingRect = document.getElementById("dispenserOpening").getBoundingClientRect();
+    var el = document.createElement("div");
+    el.className = "can";
+    el.textContent = bev.code;
+    document.getElementById("canLayer").appendChild(el);
+
+    var floorY = openingRect.top + openingRect.height - CAN_H - 6;
+    var startX = openingRect.left + openingRect.width / 2 - CAN_W / 2 + (Math.random() * 20 - 10);
+
+    var body = {
+      el: el,
+      x: startX,
+      y: reduceMotion ? floorY : openingRect.top - 140 - Math.random() * 40,
+      vx: reduceMotion ? 0 : (Math.random() * 60 - 30),
+      vy: 0,
+      rot: reduceMotion ? 0 : (Math.random() * 360 - 180),
+      vrot: reduceMotion ? 0 : (Math.random() * 240 - 120),
+      floorY: floorY,
+      bounced: reduceMotion,
+      dragging: false
+    };
+    cans.push(body);
+    applyCanTransform(body);
+    wireCanDrag(body);
+
+    setTimeout(function(){ removeCan(body); }, 15000);
+
+    if(physicsRAF===null){ physicsLastT = null; physicsRAF = requestAnimationFrame(stepPhysics); }
+  }
+
   function dispense(bev){
     if(coinState!=="armed" || machine.status==="lockdown" || machine.stores<=0) return;
     machine.stores -= 1;
-    var opening = document.getElementById("dispenserOpening");
-    opening.innerHTML = "";
-    var can = document.createElement("div");
-    can.className = "can";
-    can.textContent = bev.code;
-    opening.appendChild(can);
+    spawnCanPhysics(bev);
     document.getElementById("dispenseCaption").innerHTML = '<span class="n">'+esc(bev.name)+'</span> — '+esc(bev.effect);
     coinState = "idle";
     renderPad();
