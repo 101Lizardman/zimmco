@@ -68,46 +68,83 @@
     pointer-events:none;
   }
 
-  .cabinet__window{
+  /* ---------- CRT display ---------- */
+  .crt{
+    background: linear-gradient(155deg, var(--primary-shade-2), var(--black) 70%);
+    border-radius:22px;
+    padding:12px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.07), inset 0 2px 6px rgba(0,0,0,.5);
+  }
+  .crt__glass{
+    position:relative;
+    border-radius:38px / 20px;
+    overflow:hidden;
     background: var(--black);
-    border-radius:8px;
-    padding:10px;
+    box-shadow:
+      inset 0 0 0 3px rgba(0,0,0,.6),
+      inset 0 0 30px rgba(0,0,0,.9),
+      inset 0 0 50px rgba(242,101,33,.08);
+    animation: crt-flicker 6s ease-in-out infinite;
+  }
+  .crt__glass::before{
+    content:"";
+    position:absolute; inset:0;
+    background:
+      radial-gradient(130% 90% at 22% -15%, rgba(255,255,255,.10), transparent 55%),
+      radial-gradient(140% 110% at 50% 120%, transparent 45%, rgba(0,0,0,.7) 100%);
+    pointer-events:none;
+    z-index:2;
+  }
+  .crt__glass::after{
+    content:"";
+    position:absolute; inset:0;
+    background: repeating-linear-gradient(to bottom, rgba(0,0,0,.4) 0px, rgba(0,0,0,.4) 1px, transparent 2px, transparent 3px);
+    pointer-events:none;
+    z-index:2;
+  }
+  @keyframes crt-flicker{ 0%,100%{ opacity:1; } 50%{ opacity:.985; } 52%{ opacity:.96; } 54%{ opacity:.985; } }
+  @media (prefers-reduced-motion: reduce){ .crt__glass{ animation:none; } }
+
+  .cabinet__window{
+    position:relative;
+    padding:14px 10px;
     display:grid;
     grid-template-columns:repeat(2, 1fr);
     gap:8px;
-    box-shadow: inset 0 3px 14px rgba(0,0,0,0.75), inset 0 0 0 1px rgba(255,255,255,0.04);
     min-height:76px;
   }
   @media (min-width:420px){ .cabinet__window{ grid-template-columns:repeat(4,1fr); } }
 
   .pad-btn{
-    background: var(--primary-shade-2);
-    border:1px solid var(--secondary-soft);
-    border-radius:6px;
-    color:var(--white);
+    background: rgba(242,101,33,.05);
+    border:1px solid rgba(242,101,33,.28);
+    border-radius:4px;
+    color:var(--secondary);
     text-align:left;
     padding:9px 10px;
     cursor:pointer;
     display:flex; flex-direction:column; gap:3px;
-    transition: transform .12s ease, border-color .12s ease, background .12s ease;
+    text-shadow: 0 0 6px rgba(242,101,33,.55);
+    transition: border-color .12s ease, background .12s ease, text-shadow .12s ease;
   }
-  .pad-btn:hover{ border-color:var(--secondary); background:var(--primary-shade); }
-  .pad-btn:active{ transform: translateY(2px) scale(.98); }
+  .pad-btn:hover{ border-color:var(--secondary); background:rgba(242,101,33,.12); text-shadow:0 0 9px rgba(242,101,33,.8); }
+  .pad-btn:active{ transform: translateY(1px); }
   .pad-btn:focus-visible{ outline:2px solid var(--secondary); outline-offset:2px; }
-  .pad-btn:disabled{ opacity:.35; cursor:not-allowed; }
-  .pad-btn__code{ font-family:'IBM Plex Mono', monospace; font-size:10px; color:var(--secondary); }
+  .pad-btn:disabled{ opacity:.3; cursor:not-allowed; text-shadow:none; }
+  .pad-btn__code{ font-family:'IBM Plex Mono', monospace; font-size:10px; color:var(--white-faint); text-shadow:none; }
   .pad-btn__name{ font-family:'Oswald', sans-serif; font-weight:600; font-size:13.5px; letter-spacing:.02em; }
-  .pad-btn__badge{ font-family:'IBM Plex Mono', monospace; font-size:8.5px; letter-spacing:.06em; color:var(--white-faint); text-transform:uppercase; }
+  .pad-btn__badge{ font-family:'IBM Plex Mono', monospace; font-size:8.5px; letter-spacing:.06em; color:rgba(242,101,33,.6); text-transform:uppercase; text-shadow:none; }
 
   .pricecard{
     margin-top:8px;
-    text-align:center;
+    display:flex; align-items:center; justify-content:center; gap:10px;
     font-family:'Oswald', sans-serif; font-weight:600; font-size:11px; letter-spacing:.18em;
     text-transform:uppercase; color:var(--white-dim);
     border-top:1px dashed var(--secondary-soft); border-bottom:1px dashed var(--secondary-soft);
     padding:6px 0;
   }
   .pricecard span{ color:var(--secondary); }
+  .coinslot{ flex:none; opacity:.9; }
 
   .cabinet__tray{
     margin-top:12px;
@@ -186,8 +223,20 @@
 
 <div class="stage">
   <div class="cabinet" id="machine">
-    <div class="cabinet__window" id="selectionPad" role="group" aria-label="Beverage selection pad"></div>
-    <div class="pricecard">Select A Flavour · <span>25¢</span></div>
+    <div class="crt">
+      <div class="crt__glass">
+        <div class="cabinet__window" id="selectionPad" role="group" aria-label="Beverage selection pad"></div>
+      </div>
+    </div>
+    <div class="pricecard">
+      <svg class="coinslot" width="46" height="22" viewBox="0 0 46 22" aria-hidden="true" focusable="false">
+        <rect x="1" y="1" width="34" height="20" rx="4" fill="#000000" stroke="rgba(255,255,255,.22)" stroke-width="1"/>
+        <rect x="9" y="9" width="18" height="4" rx="2" fill="#000000" stroke="rgba(0,0,0,.6)"/>
+        <rect x="37" y="5" width="7" height="12" rx="1.5" fill="#04070b" stroke="rgba(255,255,255,.22)" stroke-width="1"/>
+        <line x1="38.2" y1="11" x2="42.8" y2="11" stroke="rgba(255,255,255,.28)" stroke-width="1"/>
+      </svg>
+      Select A Flavour · <span>25¢</span>
+    </div>
 
     <div class="cabinet__tray" id="dispenseTray" aria-live="polite">
       <p class="tray__placeholder">— tray empty —</p>
