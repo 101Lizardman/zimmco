@@ -1,0 +1,652 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZimmCo Vending Unit</title>
+<meta name="description" content="An interactive prop and GM reference for the ZimmCo Refreshment Vending Machine — a Mothership RPG module." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#0b0d12;
+    --bg-raised:#171b23;
+    --bg-raised-2:#1e232d;
+    --bg-inset:#05060a;
+    --orange:#ff5f1f;
+    --orange-dim:#c2450f;
+    --amber:#ffb648;
+    --rare:#b98cff;
+    --paper:#ede4d3;
+    --paper-dim:#ab9f8c;
+    --paper-faint:#726a5c;
+    --line:rgba(255,95,31,0.28);
+    --line-soft:rgba(237,228,211,0.1);
+    --good:#57d9a3;
+    --warn:#ffb648;
+    --danger:#ff4d4d;
+    --shadow: 0 20px 50px rgba(0,0,0,0.55);
+    --radius: 10px;
+  }
+
+  *,*::before,*::after{ box-sizing:border-box; }
+  html{ color-scheme: dark; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--paper);
+    font-family:'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{ text-wrap:balance; margin:0; }
+  p{ margin:0; }
+  button{ font-family:inherit; }
+  ::selection{ background:var(--orange); color:#1a0d05; }
+
+  a{ color:var(--amber); }
+
+  .mono{ font-family:'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric:tabular-nums; }
+
+  /* ---------- layout shell ---------- */
+  .page{ max-width:1080px; margin:0 auto; padding: 0 20px 80px; }
+
+  .brandbar{
+    background:
+      repeating-linear-gradient(135deg, var(--orange) 0 14px, var(--orange-dim) 14px 28px);
+    height:8px;
+  }
+  .brandbar__inner{
+    max-width:1080px; margin:0 auto; padding:10px 20px;
+    display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--paper-dim);
+    border-bottom:1px solid var(--line-soft);
+  }
+  .brandbar__inner span.hot{ color:var(--orange); }
+
+  .stripe-divider{
+    height:10px; margin:56px 0;
+    background: repeating-linear-gradient(-45deg, var(--orange) 0 10px, transparent 10px 20px);
+    opacity:.85;
+    border-radius:2px;
+  }
+
+  /* ---------- hero / cabinet ---------- */
+  .hero{ padding-top:44px; display:grid; gap:36px; }
+  @media (min-width:880px){ .hero{ grid-template-columns: 380px 1fr; align-items:start; } }
+
+  .cabinet{
+    background: linear-gradient(180deg, var(--bg-raised-2), var(--bg-raised));
+    border:1px solid var(--line-soft);
+    border-radius: 16px;
+    padding:16px;
+    box-shadow: var(--shadow);
+    position:relative;
+  }
+  .cabinet::before{
+    content:"";
+    position:absolute; inset:0;
+    border-radius:16px;
+    box-shadow: inset 0 0 0 6px rgba(0,0,0,0.35);
+    pointer-events:none;
+  }
+
+  .cabinet__header{
+    text-align:center;
+    padding: 18px 10px 16px;
+    border-bottom:3px solid var(--orange);
+    margin-bottom:14px;
+  }
+  .wordmark{
+    font-family:'Anton', sans-serif;
+    font-size:clamp(34px, 8vw, 44px);
+    letter-spacing:.02em;
+    line-height:.85;
+    color:var(--paper);
+  }
+  .wordmark span{ color:var(--orange); }
+  .tagline{
+    font-family:'Oswald', sans-serif;
+    font-weight:600;
+    font-size:12.5px;
+    letter-spacing:.24em;
+    text-transform:uppercase;
+    color:var(--amber);
+    margin-top:6px;
+    transform: skewX(-8deg);
+  }
+  .seal{
+    margin-top:10px; font-family:'IBM Plex Mono', monospace;
+    font-size:9.5px; letter-spacing:.08em; color:var(--paper-faint);
+    text-transform:uppercase;
+  }
+
+  .cabinet__window{
+    background: var(--bg-inset);
+    border-radius:8px;
+    padding:12px;
+    display:grid;
+    grid-template-columns:repeat(2, 1fr);
+    gap:8px;
+    box-shadow: inset 0 3px 14px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,255,255,0.03);
+  }
+  @media (min-width:420px) and (max-width:879px){ .cabinet__window{ grid-template-columns:repeat(4,1fr); } }
+
+  .pad-btn{
+    background: var(--bg-raised);
+    border:1px solid var(--line-soft);
+    border-radius:6px;
+    color:var(--paper);
+    text-align:left;
+    padding:9px 10px;
+    cursor:pointer;
+    display:flex; flex-direction:column; gap:3px;
+    transition: transform .12s ease, border-color .12s ease, background .12s ease;
+  }
+  .pad-btn:hover{ border-color:var(--orange); background:var(--bg-raised-2); }
+  .pad-btn:active{ transform: translateY(2px) scale(.98); }
+  .pad-btn:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+  .pad-btn__code{ font-family:'IBM Plex Mono', monospace; font-size:10px; color:var(--paper-faint); }
+  .pad-btn__name{ font-family:'Oswald', sans-serif; font-weight:600; font-size:13.5px; letter-spacing:.02em; }
+  .pad-btn[data-range="classic"] .pad-btn__code{ color:var(--orange); }
+  .pad-btn[data-range="zimmka"] .pad-btn__code{ color:var(--amber); }
+  .pad-btn[data-range="rare"] .pad-btn__code{ color:var(--rare); }
+  .pad-btn[data-range="all"] .pad-btn__code{ color:var(--good); }
+
+  .cabinet__led{
+    margin-top:12px;
+    background: var(--bg-inset);
+    border:1px solid var(--line-soft);
+    border-radius:6px;
+    padding:10px 12px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--amber);
+    display:grid;
+    gap:4px;
+    text-shadow: 0 0 8px rgba(255,182,72,.35);
+  }
+  .cabinet__led .led-row{ display:flex; justify-content:space-between; gap:8px; }
+  .cabinet__led .led-row .k{ color:var(--paper-faint); text-transform:uppercase; letter-spacing:.08em; font-size:10.5px; }
+  .status-pill{
+    font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+    padding:1px 7px; border-radius:100px; border:1px solid currentColor;
+  }
+  .status-pill.operational{ color:var(--good); }
+  .status-pill.opened{ color:var(--warn); }
+  .status-pill.hacked{ color:var(--rare); }
+  .status-pill.lockdown{ color:var(--danger); }
+
+  .cabinet__controls{
+    display:grid; grid-template-columns:1fr auto; gap:8px;
+    margin-top:12px;
+  }
+  .btn{
+    font-family:'Oswald', sans-serif; font-weight:600; letter-spacing:.05em; text-transform:uppercase;
+    font-size:13.5px;
+    border-radius:6px; border:1px solid transparent; cursor:pointer;
+    padding:11px 14px;
+    transition: transform .1s ease, filter .12s ease;
+  }
+  .btn:active{ transform: translateY(1px); }
+  .btn:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+  .btn--primary{ background:var(--orange); color:#1a0d05; }
+  .btn--primary:hover{ filter:brightness(1.08); }
+  .btn--primary:disabled{ background:var(--bg-raised-2); color:var(--paper-faint); cursor:not-allowed; }
+  .btn--ghost{ background:transparent; border-color:var(--line-soft); color:var(--paper-dim); }
+  .btn--ghost:hover{ border-color:var(--orange); color:var(--paper); }
+
+  .cabinet__status-controls{
+    margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;
+  }
+  .chip{
+    font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.04em; text-transform:uppercase;
+    background:transparent; border:1px solid var(--line-soft); color:var(--paper-faint);
+    border-radius:4px; padding:5px 8px; cursor:pointer;
+  }
+  .chip:hover{ border-color:var(--orange); color:var(--paper); }
+  .chip:focus-visible{ outline:2px solid var(--amber); outline-offset:1px; }
+
+  .cabinet__tray{
+    margin-top:12px;
+    min-height:74px;
+    background: var(--bg-inset);
+    border-radius:6px;
+    border:1px dashed var(--line-soft);
+    padding:10px 12px;
+    display:flex; align-items:center;
+  }
+  .tray__placeholder{ color:var(--paper-faint); font-family:'IBM Plex Mono', monospace; font-size:12px; }
+  .can-card{
+    display:grid; grid-template-columns:auto 1fr; gap:10px; align-items:center;
+    animation: drop .35s ease;
+    width:100%;
+  }
+  @media (prefers-reduced-motion: reduce){ .can-card{ animation:none; } }
+  @keyframes drop{ from{ transform:translateY(-14px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
+  .can-dot{
+    width:34px; height:34px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono', monospace; font-size:10px; font-weight:600;
+    border:2px solid currentColor;
+  }
+  .can-card[data-range="classic"] .can-dot{ color:var(--orange); }
+  .can-card[data-range="zimmka"] .can-dot{ color:var(--amber); }
+  .can-card[data-range="rare"] .can-dot{ color:var(--rare); }
+  .can-name{ font-family:'Oswald', sans-serif; font-weight:600; font-size:14.5px; }
+  .can-effect{ font-size:12.5px; color:var(--paper-dim); }
+
+  .hero__intro{ padding-top:6px; }
+  .eyebrow{
+    font-family:'Oswald', sans-serif; font-weight:600; font-size:12.5px; letter-spacing:.24em;
+    text-transform:uppercase; color:var(--orange); transform:skewX(-8deg); display:inline-block;
+  }
+  .hero__intro h1{
+    font-family:'Oswald', sans-serif; font-weight:700; font-style:normal;
+    font-size:clamp(26px,4vw,34px); letter-spacing:.01em; text-transform:uppercase;
+    margin:8px 0 14px; transform:skewX(-3deg); transform-origin:left;
+  }
+  .hero__intro p{ color:var(--paper-dim); max-width:62ch; margin-bottom:12px; font-size:15px; }
+  .hero__intro p strong{ color:var(--paper); }
+
+  /* ---------- panels ---------- */
+  .panel__title{
+    font-family:'Oswald', sans-serif; font-weight:700; text-transform:uppercase;
+    font-size:clamp(22px,3.4vw,30px); letter-spacing:.02em;
+    transform:skewX(-6deg); transform-origin:left; display:inline-block;
+    border-top:3px solid var(--orange); border-bottom:1px solid var(--line);
+    padding:5px 2px;
+  }
+  .panel__note{ color:var(--paper-dim); max-width:68ch; margin-top:14px; font-size:14.5px; }
+
+  .bev-grid{
+    margin-top:22px; display:grid; gap:12px;
+    grid-template-columns:repeat(auto-fit, minmax(240px,1fr));
+  }
+  .bev-card{
+    background:var(--bg-raised); border:1px solid var(--line-soft); border-radius:8px;
+    padding:14px 16px; display:grid; gap:6px;
+  }
+  .bev-card__top{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+  .bev-card__name{ font-family:'Oswald', sans-serif; font-weight:600; font-size:17px; }
+  .bev-card__badge{ font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; padding:2px 6px; border-radius:4px; border:1px solid currentColor; }
+  .bev-card[data-range="classic"] .bev-card__badge{ color:var(--orange); }
+  .bev-card[data-range="zimmka"] .bev-card__badge{ color:var(--amber); }
+  .bev-card[data-range="rare"] .bev-card__badge{ color:var(--rare); }
+  .bev-card[data-range="all"] .bev-card__badge{ color:var(--good); }
+  .bev-card__flavor{ font-style:italic; color:var(--paper-dim); font-size:13px; }
+  .bev-card__effect{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--paper); background:var(--bg-inset); border-radius:5px; padding:7px 9px; }
+
+  .terminal{
+    margin-top:14px; background:var(--bg-inset); border:1px solid var(--line-soft); border-radius:8px;
+    padding:16px; font-family:'IBM Plex Mono', monospace; font-size:13.5px; color:var(--amber);
+    min-height:52px; display:flex; align-items:center;
+  }
+  .terminal.is-empty{ color:var(--paper-faint); }
+  .terminal .rn{ color:var(--paper-faint); margin-right:10px; }
+
+  .states-grid{ margin-top:20px; display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); }
+  .state-card{ background:var(--bg-raised); border-radius:8px; padding:14px 16px; border-left:4px solid var(--line-soft); }
+  .state-card[data-k="opened"]{ border-color:var(--warn); }
+  .state-card[data-k="hacked"]{ border-color:var(--rare); }
+  .state-card[data-k="lockdown"]{ border-color:var(--danger); }
+  .state-card h3{ font-family:'Oswald', sans-serif; font-weight:600; text-transform:uppercase; font-size:14.5px; letter-spacing:.06em; margin-bottom:6px; }
+  .state-card p{ font-size:13px; color:var(--paper-dim); }
+
+  .accordion{ margin-top:20px; display:grid; gap:8px; }
+  .acc-item{ background:var(--bg-raised); border:1px solid var(--line-soft); border-radius:8px; overflow:hidden; }
+  .acc-item__head{
+    width:100%; display:flex; justify-content:space-between; align-items:center; gap:10px;
+    background:transparent; border:none; color:var(--paper); cursor:pointer; text-align:left;
+    padding:13px 16px; font-family:'Oswald', sans-serif; font-weight:600; font-size:14.5px; letter-spacing:.02em; text-transform:uppercase;
+  }
+  .acc-item__head:hover{ color:var(--orange); }
+  .acc-item__head:focus-visible{ outline:2px solid var(--amber); outline-offset:-2px; }
+  .acc-item__mark{ font-family:'IBM Plex Mono',monospace; color:var(--orange); transition:transform .18s ease; flex:none; }
+  .acc-item[data-open="true"] .acc-item__mark{ transform:rotate(45deg); }
+  .acc-item__body{ padding:0 16px; max-height:0; overflow:hidden; transition:max-height .22s ease, padding .22s ease; }
+  .acc-item[data-open="true"] .acc-item__body{ padding:0 16px 16px; max-height:400px; }
+  .acc-item__body p{ font-size:13.5px; color:var(--paper-dim); }
+  .acc-item__body .btn{ margin-top:10px; }
+  @media (prefers-reduced-motion: reduce){ .acc-item__body, .acc-item__mark{ transition:none; } }
+
+  .merch-wrap{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:18px; }
+
+  footer{
+    max-width:1080px; margin:0 auto; padding:40px 20px 60px;
+    border-top:1px solid var(--line-soft);
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--paper-faint);
+    line-height:1.7;
+  }
+  footer strong{ color:var(--paper-dim); }
+</style>
+
+<div class="brandbar"></div>
+<div class="brandbar__inner">
+  <span><span class="hot">ZC</span>-INDUSTRIES // REFRESHMENT DIVISION</span>
+  <span>UNIT UNMAINTAINED SINCE MANUFACTURER SHUTDOWN — <span class="hot">SUPPLY NOT GUARANTEED</span></span>
+</div>
+
+<div class="page">
+  <main>
+    <section class="hero" id="machine">
+      <div class="cabinet">
+        <div class="cabinet__header">
+          <div class="wordmark">ZIMM<span>CO</span></div>
+          <div class="tagline">Refreshment Vending Unit</div>
+          <div class="seal">For use with the Mothership® Sci-Fi Horror RPG</div>
+        </div>
+
+        <div class="cabinet__window" id="selectionPad" role="group" aria-label="Beverage selection pad"></div>
+
+        <div class="cabinet__led" id="ledReadout" aria-live="polite"></div>
+
+        <div class="cabinet__controls">
+          <button class="btn btn--primary" id="btnVend">Vend — 25¢</button>
+          <button class="btn btn--ghost" id="btnNewUnit" title="Abandon this unit and find another nearby">New Unit</button>
+        </div>
+
+        <div class="cabinet__status-controls" aria-label="Mark machine state">
+          <button class="chip" data-status="opened">Mark Opened</button>
+          <button class="chip" data-status="hacked">Mark Hacked</button>
+          <button class="chip" data-status="lockdown">Mark Lock Down</button>
+          <button class="chip" data-status="operational">Reset</button>
+        </div>
+
+        <div class="cabinet__tray" id="dispenseTray" aria-live="polite">
+          <p class="tray__placeholder">— tray empty —</p>
+        </div>
+      </div>
+
+      <div class="hero__intro">
+        <span class="eyebrow">How To Use This Prop</span>
+        <h1>Somewhere nearby, there is always another machine.</h1>
+        <p>ZimmCo Incorporated built durable transport, habitation domes and weapons for the outer-rim colonies — until its founders vanished and every factory went dark. One product outlived the company: the <strong>ZimmCo Refreshment Vending Machine</strong>. Millions were built, none are restocked, and almost none have failed. They stay unnaturally cold even long after they've lost power.</p>
+        <p>Press <strong>Find New Unit</strong> to roll up a machine — its Durability, stock, and flavour range. <strong>Vend</strong> dispenses a random can from what it carries, or tap a button on the pad to pull a specific flavour. Use the chips to track whether the unit gets cracked open, hacked, or bolts into Lock Down.</p>
+      </div>
+    </section>
+
+    <div class="stripe-divider"></div>
+
+    <section id="beverages" class="panel">
+      <span class="panel__title">Beverages</span>
+      <p class="panel__note">Drinks are 25C each. All effects cease an hour after drinking if not utilized — and due to the nature of ZimmCo beverages, a human can only receive one effect's benefit every 6 hours.</p>
+      <div class="bev-grid" id="bevGrid"></div>
+    </section>
+
+    <div class="stripe-divider"></div>
+
+    <section id="rumors" class="panel">
+      <span class="panel__title">Rumors</span>
+      <p class="panel__note">The first time your crew encounters a ZimmCo machine, roll a d10 for a rumor circulating about the company and its unmaintained hardware.</p>
+      <div class="merch-wrap">
+        <button class="btn btn--primary" id="btnRumor">Roll Rumor (d10)</button>
+      </div>
+      <div class="terminal is-empty" id="rumorOutput">— awaiting query —</div>
+    </section>
+
+    <div class="stripe-divider"></div>
+
+    <section id="states" class="panel">
+      <span class="panel__title">Machine States</span>
+      <p class="panel__note">Locals get twitchy about seeing one of their machines taken out of service.</p>
+      <div class="states-grid" id="statesGrid"></div>
+    </section>
+
+    <div class="stripe-divider"></div>
+
+    <section id="actions" class="panel">
+      <span class="panel__title">Alternate Actions</span>
+      <p class="panel__note">The machine has AP 8 — its construction is solid. Expand an action for its mechanics.</p>
+      <div class="accordion" id="accordion"></div>
+    </section>
+
+    <div class="stripe-divider"></div>
+
+    <section id="merch" class="panel">
+      <span class="panel__title">Merch Crate</span>
+      <p class="panel__note">Odds and ends of ZimmCo ephemera you might find lying around a machine, a Kombinat ruin, or a scavenger's pack.</p>
+      <div class="merch-wrap">
+        <button class="btn btn--primary" id="btnMerch">Pull An Item</button>
+      </div>
+      <div class="terminal is-empty" id="merchOutput">— crate sealed —</div>
+    </section>
+  </main>
+
+  <footer>
+    <p><strong>ZimmCo Refreshment Beverages</strong> — a Mothership RPG prop, written by Shane Vincent.</p>
+    <p>This product is based on the Mothership® Sci-Fi Horror Role Playing Game, published by Tuesday Knight Games. This product is published under license. MOTHERSHIP® is a registered trademark of Tuesday Knight Games. All rights reserved. For additional information, visit <a href="https://www.tuesdayknightgames.com" target="_blank" rel="noopener">tuesdayknightgames.com</a> or contact contact@tuesdayknightgames.com.</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var BEVERAGES = [
+    { id:"klassic", name:"Klassic", range:"all", code:"A1", flavor:"A smooth original flavour that tantalizes your taste receptors.", effect:"+5 to the stat of your choice for your next roll on it." },
+    { id:"atomka", name:"Atomka!", range:"classic", code:"B1", flavor:"Diet alternative, emits a soft glow when agitated.", effect:"−1 stress." },
+    { id:"hammer", name:"Hammer", range:"classic", code:"B2", flavor:"Deep cherry red in colour and flavour. Stains lips and teeth.", effect:"+1 health." },
+    { id:"frost", name:"Frost", range:"classic", code:"B3", flavor:"Tingles *all* the way down.", effect:"Advantage on your next SPEED check." },
+    { id:"geiger", name:"Geiger", range:"zimmka", code:"C1", flavor:"The tactile feedback of the carbonation fizzle is stronger than you expect.", effect:"Advantage on your next BODY save." },
+    { id:"bomba", name:"Bomba", range:"zimmka", code:"C2", flavor:"Kick to the chest, warm to the core.", effect:"Advantage on saves against COLD hazards." },
+    { id:"aurora", name:"Aurora", range:"zimmka", code:"C3", flavor:"Warm frothy bubbles erupt slowly and constantly.", effect:"Can survive with no oxygen supply for 15 minutes." },
+    { id:"iskra", name:"Iskra", range:"rare", code:"D9", flavor:"Light, bubbly sensation, tantalizes your psyche.", effect:"Advantage on your next SANITY save. Sells for 500C+ — collectors and shadowy corporate proxies pay well." }
+  ];
+
+  var RUMORS = [
+    "TOOLS: In exchange for a pack of cigarettes, an old shipwright told you how to find the little lever tucked away behind the panel of the coin slot…",
+    "BUILT RIGHT: While drinking heavily you are regaled of a time when someone once patched up their radiation shielding with panels from a ZimmCo vending machine…",
+    "TERMINAL: After catching that kid trying to spoof your ID chip, you learn that she got access to it from the vending machine — why is it even on the network?",
+    "PROXIMITY SENSOR: Junkers used to set these up as warning alarms for if any of the less community-minded individuals happened upon the same wreck…",
+    "TRANSCEIVER: A clone mentioned they escaped their creators by smashing apart a ZimmCo vending machine and finding some sort of communicator inside…",
+    "SHELTER: You've heard this one a million times before — some Spacer in a tight spot wiggled their way inside the machine, sealed themselves in, and drifted in space for weeks. It simply can't be true… right?",
+    "JUMP START: Shorting the capacitor bank allows for a single, dangerous high-voltage surge of power, but what's left behind is just a brick.",
+    "LIFESAVER: When ZimmCo was in operation it wasn't yet forbidden to commercially use research chemicals — it's what gives Klassic flavour its unique taste.",
+    "FIZZLER: \"Well I got ten 'er twelve cans, see? Taped 'em allllll up — like this! Then when there's no atmers'phere, pop a hole in one and FZZZZZ! Foam galore.\"",
+    "GOLDEN TICKET: A closely guarded secret, often shared unwillingly, about a hidden Kombinat facility untouched by time — whispered between treasure hunters in the right circles. A trove of untouched Iskra cans, undiscovered ZimmCo patents, research notes. Could such a thing exist, and how has it remained untouched?"
+  ];
+
+  var STATES = [
+    { k:"opened", name:"Opened", body:"Access to internal components and stores." },
+    { k:"hacked", name:"Hacked", body:"The machine can be OPENED without damage." },
+    { k:"lockdown", name:"Lock Down", body:"The machine bolts the door and emits an infrequent buzzing. Can only be opened with physical force — the bolts give Disadvantage and raise the AP to 12 — and no alternate actions can be performed. Everyone within 2m as it enters Lock Down, or anyone interacting with it while locked down, takes an electric shock: BODY save or take 1 stress and 1 damage." }
+  ];
+
+  var ACTIONS = [
+    { id:"crack", title:"Crack It Open", body:"The machine has AP 8 due to its solid construction. Damage reduces the machine's Durability. At 0 it becomes OPENED. Any additional damage below 0 destroys (overkill damage × 50) cans of stock." },
+    { id:"hack", title:"Hack The Mainframe", body:"Accessing the wiring behind the terminal exposes ports for hacking it open: INTELLECT check or −d4 Durability and Lock Down. If successful, it becomes HACKED." },
+    { id:"tools", title:"Tools", body:"A small drawer pops out. Roll d10 — 0-1: Nothing · 2-4: Mechanical toolkit · 5-6: Crowbar · 7-8: Electronic tool set · 9: Lockpick set.", roll:true },
+    { id:"terminal", title:"Terminal", body:"If HACKED, you can gain access to the local network, gaining control of other nearby digital systems." },
+    { id:"transceiver", title:"Transceiver", body:"If OPENED you may attempt to extract the communicator: INTELLECT check or −d6 Durability and the Transceiver breaks. It's a crude long-distance radio, only capable of sending rudimentary communications." },
+    { id:"proximity", title:"Proximity Sensor", body:"While the machine is not in Lock Down, a device can be wired to it so that entering Lock Down triggers the device on movement within 2m. Buzzers, radios, explosives, etc. can be wired up: INTELLECT check or trigger Lock Down and damage your tools." },
+    { id:"shelter", title:"Shelter", body:"While Durability is 6+, and the unit is HACKED and OPENED, remove all internal components (Transceiver, Terminal, Tools, stores) and a single person can squeeze inside. Closing the machine while inside provides a hermetically sealed, insulated capsule. A breathable environment can be jury-rigged with an oxygen tank and the machine's carbonation system: INTELLECT check at Disadvantage or −d4 Durability and the oxygen tank is destroyed." },
+    { id:"jumpstart", title:"Jump Start", body:"While OPENED, connect the machine to whatever you'd like powered and short the capacitor bank: INTELLECT check or the capacitor bank explodes, dealing d6 EXPLOSION and rendering the machine unusable. Briefly powers a system or sets up a temporary shock trap. After use, the machine's Durability becomes 0." },
+    { id:"lifesaver", title:"Lifesaver", body:"If a large quantity (50 cans) is heated slowly under precise conditions for 2 hours, a synthetic pain-relieving stimulant can be extracted and consumed (effects of a Stimpack, but provides Disadvantage instead of Advantage). Requires careful hands and a sterile environment — interruptions result in a 50% failure rate." },
+    { id:"fizzler", title:"Fizzler", body:"ZimmCo's carbonation levels run 60% above standard, which can produce an explosive blast of foam if a can is opened in no atmosphere. It can't inflict damage, but it will definitely distract or confuse." }
+  ];
+
+  var MERCH = [
+    "A laminated menu, stained", "Comrade Zimmski plushy", "Unopened box of pamphlets",
+    "Striped employee apron", "Branded, worn tools", "Repainted machine panels",
+    "Family photos with mascot", "Gold-tier membership card", "ZimmCo arcade tokens",
+    "Cap with embroidered logo", "“Most cans consumed” medal", "“The People's Drink” patch",
+    "Commemorative solid can", "Infini-ink ZimmCo pens"
+  ];
+
+  function d10(){ return Math.floor(Math.random()*10); }
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+
+  function rollRange(){
+    var r = d10();
+    if(r<=5) return { range:"classic", label:"Classic", note:null };
+    if(r<=7) return { range:"zimmka", label:"Zimmka!", note:"The machine hums warmly." };
+    var r2 = d10();
+    if(r2>=8) return { range:"rare", label:"Iskra (Rare)", note:"A rare Iskra machine — treat it gently." };
+    if(r2<=5) return { range:"classic", label:"Classic", note:null };
+    return { range:"zimmka", label:"Zimmka!", note:"The machine hums warmly." };
+  }
+
+  function poolFor(range){
+    var klassic = BEVERAGES.filter(function(b){ return b.id==="klassic"; });
+    if(range==="classic") return klassic.concat(BEVERAGES.filter(function(b){ return b.range==="classic"; }));
+    if(range==="zimmka") return klassic.concat(BEVERAGES.filter(function(b){ return b.range==="zimmka"; }));
+    if(range==="rare") return klassic.concat(BEVERAGES.filter(function(b){ return b.id==="iskra"; }), BEVERAGES.filter(function(b){ return b.id==="iskra"; }));
+    return BEVERAGES;
+  }
+
+  var machine = {};
+  function newMachine(){
+    var durability = d10();
+    var rr = rollRange();
+    machine = {
+      durability: durability,
+      stores: durability*100,
+      range: rr.range,
+      rangeLabel: rr.label,
+      note: rr.note,
+      status: durability===0 ? "lockdown" : "operational",
+      outOfStock:false
+    };
+  }
+
+  function statusLabel(s){
+    return { operational:"Operational", opened:"Opened", hacked:"Hacked", lockdown:"Lock Down" }[s] || s;
+  }
+
+  function renderLED(){
+    var el = document.getElementById("ledReadout");
+    var d = machine.durability, stores = Math.max(0, machine.stores);
+    el.innerHTML =
+      '<div class="led-row"><span class="k">Durability</span><span>'+d+' / 9</span></div>'+
+      '<div class="led-row"><span class="k">Stores</span><span>'+String(stores).padStart(4,"0")+' cans</span></div>'+
+      '<div class="led-row"><span class="k">Range</span><span>'+esc(machine.rangeLabel)+'</span></div>'+
+      '<div class="led-row"><span class="k">Status</span><span class="status-pill '+machine.status+'">'+statusLabel(machine.status)+'</span></div>'+
+      (machine.note ? '<div class="led-row"><span class="k">Note</span><span>'+esc(machine.note)+'</span></div>' : '')+
+      (machine.outOfStock ? '<div class="led-row"><span class="k">Alert</span><span style="color:var(--danger)">Out of stock</span></div>' : '');
+
+    var vendBtn = document.getElementById("btnVend");
+    vendBtn.disabled = machine.status==="lockdown";
+    vendBtn.textContent = machine.status==="lockdown" ? "Bolted — Lock Down" : "Vend — 25¢";
+  }
+
+  function renderPad(){
+    var pad = document.getElementById("selectionPad");
+    pad.innerHTML = BEVERAGES.map(function(b){
+      return '<button class="pad-btn" type="button" data-range="'+b.range+'" data-id="'+b.id+'" title="'+esc(b.flavor)+'">'+
+        '<span class="pad-btn__code">'+b.code+'</span>'+
+        '<span class="pad-btn__name">'+esc(b.name)+'</span>'+
+      '</button>';
+    }).join("");
+    pad.addEventListener("click", function(e){
+      var btn = e.target.closest(".pad-btn");
+      if(!btn) return;
+      dispense(BEVERAGES.find(function(b){ return b.id===btn.dataset.id; }));
+    });
+  }
+
+  function dispense(bev){
+    if(machine.status==="lockdown") return;
+    if(machine.stores<=0){ machine.outOfStock = true; renderLED(); return; }
+    machine.stores -= 1;
+    if(machine.stores<=0) machine.outOfStock = true;
+    var tray = document.getElementById("dispenseTray");
+    tray.innerHTML =
+      '<div class="can-card" data-range="'+bev.range+'">'+
+        '<span class="can-dot">'+bev.code+'</span>'+
+        '<span><span class="can-name">'+esc(bev.name)+'</span><br><span class="can-effect">'+esc(bev.effect)+'</span></span>'+
+      '</div>';
+    renderLED();
+  }
+
+  function renderBevGrid(){
+    var grid = document.getElementById("bevGrid");
+    grid.innerHTML = BEVERAGES.map(function(b){
+      var badge = b.range==="all" ? "All Ranges" : b.range==="classic" ? "Classic Range" : b.range==="zimmka" ? "Zimmka! Range" : "Rare";
+      return '<div class="bev-card" data-range="'+b.range+'">'+
+        '<div class="bev-card__top"><span class="bev-card__name">'+esc(b.name)+'</span><span class="bev-card__badge">'+badge+'</span></div>'+
+        '<p class="bev-card__flavor">'+esc(b.flavor)+'</p>'+
+        '<p class="bev-card__effect">'+esc(b.effect)+'</p>'+
+      '</div>';
+    }).join("");
+  }
+
+  function renderStates(){
+    document.getElementById("statesGrid").innerHTML = STATES.map(function(s){
+      return '<div class="state-card" data-k="'+s.k+'"><h3>'+esc(s.name)+'</h3><p>'+esc(s.body)+'</p></div>';
+    }).join("");
+  }
+
+  function renderAccordion(){
+    var wrap = document.getElementById("accordion");
+    wrap.innerHTML = ACTIONS.map(function(a){
+      return '<div class="acc-item" data-open="false" id="acc-'+a.id+'">'+
+        '<button class="acc-item__head" aria-expanded="false">'+esc(a.title)+'<span class="acc-item__mark">+</span></button>'+
+        '<div class="acc-item__body"><p>'+esc(a.body)+'</p>'+
+          (a.roll ? '<button class="btn btn--ghost" data-tools-roll="1">Open Drawer (d10)</button><p class="mono" id="toolsResult" style="margin-top:8px;color:var(--amber);"></p>' : '')+
+        '</div>'+
+      '</div>';
+    }).join("");
+
+    wrap.querySelectorAll(".acc-item__head").forEach(function(head){
+      head.addEventListener("click", function(){
+        var item = head.closest(".acc-item");
+        var open = item.dataset.open === "true";
+        item.dataset.open = open ? "false" : "true";
+        head.setAttribute("aria-expanded", String(!open));
+      });
+    });
+
+    var toolsBtn = wrap.querySelector('[data-tools-roll]');
+    if(toolsBtn){
+      toolsBtn.addEventListener("click", function(e){
+        e.stopPropagation();
+        var r = d10();
+        var results = ["Nothing","Nothing","Mechanical toolkit","Mechanical toolkit","Mechanical toolkit","Crowbar","Crowbar","Electronic tool set","Electronic tool set","Lockpick set"];
+        document.getElementById("toolsResult").textContent = "Roll: "+r+" — "+results[r];
+      });
+    }
+  }
+
+  function setStatus(s){
+    machine.status = s;
+    if(s!=="lockdown") machine.outOfStock = machine.stores<=0;
+    renderLED();
+  }
+
+  // ---- wire up ----
+  document.getElementById("btnNewUnit").addEventListener("click", function(){
+    newMachine();
+    renderLED();
+    document.getElementById("dispenseTray").innerHTML = '<p class="tray__placeholder">— tray empty —</p>';
+  });
+  document.getElementById("btnVend").addEventListener("click", function(){
+    var pool = poolFor(machine.range);
+    dispense(pick(pool));
+  });
+  document.querySelectorAll(".chip[data-status]").forEach(function(chip){
+    chip.addEventListener("click", function(){ setStatus(chip.dataset.status); });
+  });
+  document.getElementById("btnRumor").addEventListener("click", function(){
+    var i = d10();
+    var el = document.getElementById("rumorOutput");
+    el.classList.remove("is-empty");
+    el.innerHTML = '<span class="rn">'+i+'</span>'+esc(RUMORS[i]);
+  });
+  document.getElementById("btnMerch").addEventListener("click", function(){
+    var item = pick(MERCH);
+    var el = document.getElementById("merchOutput");
+    el.classList.remove("is-empty");
+    el.textContent = item;
+  });
+
+  renderPad();
+  renderBevGrid();
+  renderStates();
+  renderAccordion();
+  newMachine();
+  renderLED();
+})();
+</script>
