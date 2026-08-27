@@ -1,7 +1,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ZimmCo Vending Unit</title>
-<meta name="description" content="An interactive prop and GM reference for the ZimmCo Refreshment Vending Machine — a Mothership RPG module." />
+<meta name="description" content="An interactive prop for the ZimmCo Refreshment Vending Machine — a Mothership RPG module." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -34,35 +34,19 @@
     line-height:1.5;
     -webkit-font-smoothing:antialiased;
   }
-  h1,h2,h3{ margin:0; }
   p{ margin:0; }
   button{ font-family:inherit; }
   ::selection{ background:var(--secondary); color:var(--black); }
 
   .mono{ font-family:'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric:tabular-nums; }
 
-  /* ---------- brand ticker ---------- */
-  .brandbar{
-    background: repeating-linear-gradient(135deg, var(--secondary) 0 14px, var(--secondary-shade) 14px 28px);
-    height:8px;
-  }
-  .brandbar__inner{
-    padding:9px 16px;
-    text-align:center;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:10.5px; letter-spacing:.14em; text-transform:uppercase;
-    color:var(--white-faint);
-    border-bottom:1px solid var(--secondary-soft);
-  }
-  .brandbar__inner span{ color:var(--secondary); }
-
   /* ---------- stage ---------- */
   .stage{
-    min-height: calc(100vh - 40px);
+    min-height: 100vh;
     display:flex;
-    align-items:flex-start;
+    align-items:center;
     justify-content:center;
-    padding: 28px 14px 40px;
+    padding: 28px 14px;
   }
 
   .cabinet{
@@ -192,85 +176,13 @@
   .btn:focus-visible{ outline:2px solid var(--secondary); outline-offset:2px; }
   .btn--fill{ background:var(--secondary); border-color:var(--secondary); color:var(--black); }
   .btn--fill:hover{ filter:brightness(1.08); color:var(--black); }
-  .btn--fill:disabled{ background:var(--primary-shade); border-color:var(--secondary-soft); color:var(--white-faint); cursor:not-allowed; filter:none; }
-
-  /* ---------- service panel ---------- */
-  .cabinet__service{
-    margin-top:16px;
-    border-top:3px solid var(--secondary);
-    padding-top:12px;
-  }
-  .service__tabs{
-    display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;
-  }
-  .tab-btn{
-    font-family:'Oswald', sans-serif; font-weight:600; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
-    background:transparent; border:1px solid var(--secondary-soft); color:var(--white-faint);
-    border-radius:100px; padding:6px 12px; cursor:pointer;
-  }
-  .tab-btn:hover{ color:var(--white); border-color:var(--secondary); }
-  .tab-btn[aria-selected="true"]{ background:var(--secondary); color:var(--black); border-color:var(--secondary); }
-  .tab-btn:focus-visible{ outline:2px solid var(--secondary); outline-offset:2px; }
-
-  .service__screen{
-    background:var(--black);
-    border:1px solid var(--secondary-soft);
-    border-radius:8px;
-    padding:12px;
-    max-height:360px;
-    overflow-y:auto;
-  }
-  .service__screen::-webkit-scrollbar{ width:8px; }
-  .service__screen::-webkit-scrollbar-thumb{ background:var(--secondary-shade); border-radius:8px; }
-
-  .flav-row{
-    display:grid; grid-template-columns:1fr auto; gap:4px 10px; align-items:baseline;
-    padding:8px 0; border-bottom:1px solid var(--secondary-soft);
-  }
-  .flav-row:last-child{ border-bottom:none; }
-  .flav-row__name{ font-family:'Oswald', sans-serif; font-weight:600; font-size:13.5px; }
-  .flav-row__badge{ font-family:'IBM Plex Mono', monospace; font-size:8.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--secondary); }
-  .flav-row__effect{ grid-column:1 / -1; font-size:12px; color:var(--white-dim); }
-
-  .roll-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
-  .readout{
-    font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--secondary);
-    min-height:1.4em;
-  }
-  .readout.is-empty{ color:var(--white-faint); }
-  .readout .rn{ color:var(--white-faint); margin-right:8px; }
-
-  .state-row{ padding:8px 0; border-bottom:1px solid var(--secondary-soft); }
-  .state-row:last-child{ border-bottom:none; }
-  .state-row__name{ font-family:'Oswald', sans-serif; font-weight:600; font-size:12.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--secondary); }
-  .state-row__body{ font-size:12px; color:var(--white-dim); margin-top:2px; }
-
-  .acc-item{ border-bottom:1px solid var(--secondary-soft); }
-  .acc-item:last-child{ border-bottom:none; }
-  .acc-item__head{
-    width:100%; display:flex; justify-content:space-between; align-items:center; gap:10px;
-    background:transparent; border:none; color:var(--white); cursor:pointer; text-align:left;
-    padding:9px 0; font-family:'Oswald', sans-serif; font-weight:600; font-size:12.5px; letter-spacing:.04em; text-transform:uppercase;
-  }
-  .acc-item__head:hover{ color:var(--secondary); }
-  .acc-item__head:focus-visible{ outline:2px solid var(--secondary); outline-offset:-2px; }
-  .acc-item__mark{ font-family:'IBM Plex Mono',monospace; color:var(--secondary); transition:transform .18s ease; flex:none; }
-  .acc-item[data-open="true"] .acc-item__mark{ transform:rotate(45deg); }
-  .acc-item__body{ max-height:0; overflow:hidden; transition:max-height .2s ease; }
-  .acc-item[data-open="true"] .acc-item__body{ max-height:260px; }
-  .acc-item__body p{ font-size:12px; color:var(--white-dim); padding-bottom:10px; }
-  .acc-item__body .btn{ margin-bottom:10px; }
-  @media (prefers-reduced-motion: reduce){ .acc-item__body, .acc-item__mark{ transition:none; } }
 
   footer{
     max-width:520px; margin:0 auto; padding:0 16px 40px;
-    font-family:'IBM Plex Mono', monospace; font-size:9.5px; color:var(--white-faint);
+    font-family:'IBM Plex Mono', monospace; font-size:9px; color:var(--white-faint);
     line-height:1.6; text-align:center;
   }
 </style>
-
-<div class="brandbar"></div>
-<div class="brandbar__inner">ZC-INDUSTRIES // REFRESHMENT DIVISION — <span>SUPPLY NOT GUARANTEED</span></div>
 
 <div class="stage">
   <div class="cabinet" id="machine">
@@ -286,27 +198,6 @@
     <div class="cabinet__controls">
       <button class="btn" id="btnNewUnit" title="Abandon this unit and find another nearby">New Unit</button>
       <button class="btn" id="btnSound" aria-pressed="true" title="Toggle vend sound effects">Sound: On</button>
-      <button class="btn" data-status="opened">Opened</button>
-      <button class="btn" data-status="hacked">Hacked</button>
-      <button class="btn" data-status="lockdown">Lock Down</button>
-      <button class="btn" data-status="operational">Reset</button>
-    </div>
-
-    <div class="cabinet__service">
-      <div class="service__tabs" role="tablist" id="serviceTabs">
-        <button class="tab-btn" data-tab="flavours" aria-selected="true">Flavours</button>
-        <button class="tab-btn" data-tab="rumors" aria-selected="false">Rumors</button>
-        <button class="tab-btn" data-tab="states" aria-selected="false">States</button>
-        <button class="tab-btn" data-tab="actions" aria-selected="false">Actions</button>
-        <button class="tab-btn" data-tab="merch" aria-selected="false">Merch</button>
-      </div>
-      <div class="service__screen">
-        <div class="tab-pane" data-pane="flavours" id="paneFlavours"></div>
-        <div class="tab-pane" data-pane="rumors" id="paneRumors" hidden></div>
-        <div class="tab-pane" data-pane="states" id="paneStates" hidden></div>
-        <div class="tab-pane" data-pane="actions" id="paneActions" hidden></div>
-        <div class="tab-pane" data-pane="merch" id="paneMerch" hidden></div>
-      </div>
     </div>
   </div>
 </div>
@@ -330,48 +221,7 @@
     { id:"iskra", name:"Iskra", range:"rare", code:"D9", flavor:"Light, bubbly sensation, tantalizes your psyche.", effect:"Advantage on your next SANITY save. Sells for 500C+ — collectors and shadowy corporate proxies pay well." }
   ];
 
-  var RUMORS = [
-    "TOOLS: In exchange for a pack of cigarettes, an old shipwright told you how to find the little lever tucked away behind the panel of the coin slot…",
-    "BUILT RIGHT: While drinking heavily you are regaled of a time when someone once patched up their radiation shielding with panels from a ZimmCo vending machine…",
-    "TERMINAL: After catching that kid trying to spoof your ID chip, you learn that she got access to it from the vending machine — why is it even on the network?",
-    "PROXIMITY SENSOR: Junkers used to set these up as warning alarms for if any of the less community-minded individuals happened upon the same wreck…",
-    "TRANSCEIVER: A clone mentioned they escaped their creators by smashing apart a ZimmCo vending machine and finding some sort of communicator inside…",
-    "SHELTER: You've heard this one a million times before — some Spacer in a tight spot wiggled their way inside the machine, sealed themselves in, and drifted in space for weeks. It simply can't be true… right?",
-    "JUMP START: Shorting the capacitor bank allows for a single, dangerous high-voltage surge of power, but what's left behind is just a brick.",
-    "LIFESAVER: When ZimmCo was in operation it wasn't yet forbidden to commercially use research chemicals — it's what gives Klassic flavour its unique taste.",
-    "FIZZLER: \"Well I got ten 'er twelve cans, see? Taped 'em allllll up — like this! Then when there's no atmers'phere, pop a hole in one and FZZZZZ! Foam galore.\"",
-    "GOLDEN TICKET: A closely guarded secret about a hidden Kombinat facility untouched by time — a trove of untouched Iskra cans, undiscovered ZimmCo patents, research notes. Could such a thing exist, and how has it remained untouched?"
-  ];
-
-  var STATES = [
-    { name:"Opened", body:"Access to internal components and stores." },
-    { name:"Hacked", body:"The machine can be OPENED without damage." },
-    { name:"Lock Down", body:"Bolts the door, emits an infrequent buzzing. Only opens with physical force — Disadvantage, AP raised to 12 — and no alternate actions can be performed. Everyone within 2m as it locks down, or anyone touching it while locked, takes a shock: BODY save or 1 stress and 1 damage." }
-  ];
-
-  var ACTIONS = [
-    { id:"crack", title:"Crack It Open", body:"AP 8 — solid construction. Damage reduces Durability. At 0 it becomes OPENED. Overkill damage below 0 destroys (overkill × 50) cans of stock." },
-    { id:"hack", title:"Hack The Mainframe", body:"Wiring behind the terminal exposes ports for hacking: INTELLECT check or −d4 Durability and Lock Down. Success becomes HACKED." },
-    { id:"tools", title:"Tools", body:"A small drawer pops out. Roll d10 — 0-1 Nothing · 2-4 Mechanical toolkit · 5-6 Crowbar · 7-8 Electronic tool set · 9 Lockpick set.", roll:true },
-    { id:"terminal", title:"Terminal", body:"If HACKED, gain access to the local network and control of nearby digital systems." },
-    { id:"transceiver", title:"Transceiver", body:"If OPENED, extract the communicator: INTELLECT check or −d6 Durability and it breaks. A crude long-distance radio, rudimentary communications only." },
-    { id:"proximity", title:"Proximity Sensor", body:"While not in Lock Down, wire a device to trigger on movement within 2m the moment it locks down. Buzzers, radios, explosives, etc: INTELLECT check or trigger Lock Down and damage your tools." },
-    { id:"shelter", title:"Shelter", body:"Durability 6+, HACKED and OPENED: strip all internal components and a person can squeeze inside. Closing it seals a hermetic, insulated capsule. Breathable air can be jury-rigged with an oxygen tank and the carbonation system: INTELLECT check at Disadvantage or −d4 Durability and the tank is destroyed." },
-    { id:"jumpstart", title:"Jump Start", body:"While OPENED, connect it to whatever you'd like powered and short the capacitor bank: INTELLECT check or it explodes, dealing d6 EXPLOSION and rendering the machine unusable. Briefly powers a system or sets a shock trap. After use, Durability becomes 0." },
-    { id:"lifesaver", title:"Lifesaver", body:"50 cans heated slowly under precise conditions for 2 hours yields a synthetic pain-relieving stimulant (effects of a Stimpack, but Disadvantage instead of Advantage). Interruptions: 50% failure rate." },
-    { id:"fizzler", title:"Fizzler", body:"Carbonation runs 60% above standard — a can opened in no atmosphere can blast foam. No damage, but distracts or confuses." }
-  ];
-
-  var MERCH = [
-    "A laminated menu, stained", "Comrade Zimmski plushy", "Unopened box of pamphlets",
-    "Striped employee apron", "Branded, worn tools", "Repainted machine panels",
-    "Family photos with mascot", "Gold-tier membership card", "ZimmCo arcade tokens",
-    "Cap with embroidered logo", "“Most cans consumed” medal", "“The People's Drink” patch",
-    "Commemorative solid can", "Infini-ink ZimmCo pens"
-  ];
-
   function d10(){ return Math.floor(Math.random()*10); }
-  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
   function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
 
   /* ---------------------------------------------------------------------
@@ -476,7 +326,7 @@
   }
 
   function statusLabel(s){
-    return { operational:"Operational", opened:"Opened", hacked:"Hacked", lockdown:"Lock Down" }[s] || s;
+    return { operational:"Operational", lockdown:"Lock Down" }[s] || s;
   }
 
   function renderLED(){
@@ -520,68 +370,6 @@
     }
   }
 
-  function setStatus(s){
-    machine.status = s;
-    renderLED();
-    renderPad();
-  }
-
-  function renderFlavours(){
-    document.getElementById("paneFlavours").innerHTML = BEVERAGES.map(function(b){
-      var badge = b.range==="all" ? "All Ranges" : b.range==="classic" ? "Classic" : b.range==="zimmka" ? "Zimmka!" : "Rare";
-      return '<div class="flav-row"><span class="flav-row__name">'+esc(b.name)+'</span><span class="flav-row__badge">'+badge+'</span><span class="flav-row__effect">'+esc(b.effect)+'</span></div>';
-    }).join("");
-  }
-
-  function renderStates(){
-    document.getElementById("paneStates").innerHTML = STATES.map(function(s){
-      return '<div class="state-row"><div class="state-row__name">'+esc(s.name)+'</div><div class="state-row__body">'+esc(s.body)+'</div></div>';
-    }).join("");
-  }
-
-  function renderActions(){
-    var pane = document.getElementById("paneActions");
-    pane.innerHTML = ACTIONS.map(function(a){
-      return '<div class="acc-item" data-open="false">'+
-        '<button class="acc-item__head" aria-expanded="false">'+esc(a.title)+'<span class="acc-item__mark">+</span></button>'+
-        '<div class="acc-item__body"><p>'+esc(a.body)+'</p>'+
-          (a.roll ? '<button class="btn" data-tools-roll="1">Open Drawer (d10)</button><p class="mono readout" id="toolsResult"></p>' : '')+
-        '</div>'+
-      '</div>';
-    }).join("");
-
-    pane.querySelectorAll(".acc-item__head").forEach(function(head){
-      head.addEventListener("click", function(){
-        var item = head.closest(".acc-item");
-        var open = item.dataset.open === "true";
-        item.dataset.open = open ? "false" : "true";
-        head.setAttribute("aria-expanded", String(!open));
-      });
-    });
-
-    var toolsBtn = pane.querySelector('[data-tools-roll]');
-    if(toolsBtn){
-      toolsBtn.addEventListener("click", function(e){
-        e.stopPropagation();
-        var r = d10();
-        var results = ["Nothing","Nothing","Mechanical toolkit","Mechanical toolkit","Mechanical toolkit","Crowbar","Crowbar","Electronic tool set","Electronic tool set","Lockpick set"];
-        document.getElementById("toolsResult").textContent = "Roll: "+r+" — "+results[r];
-      });
-    }
-  }
-
-  function initTabs(){
-    var tabs = document.querySelectorAll(".tab-btn");
-    tabs.forEach(function(tab){
-      tab.addEventListener("click", function(){
-        tabs.forEach(function(t){ t.setAttribute("aria-selected", t===tab ? "true" : "false"); });
-        document.querySelectorAll(".tab-pane").forEach(function(pane){
-          pane.hidden = pane.dataset.pane !== tab.dataset.tab;
-        });
-      });
-    });
-  }
-
   // ---- wire up ----
   document.getElementById("selectionPad").addEventListener("click", function(e){
     var btn = e.target.closest(".pad-btn");
@@ -599,33 +387,7 @@
     renderSoundBtn();
     if(soundEnabled) ensureAudioCtx();
   });
-  document.querySelectorAll(".btn[data-status]").forEach(function(chip){
-    chip.addEventListener("click", function(){ setStatus(chip.dataset.status); });
-  });
 
-  document.getElementById("paneRumors").innerHTML =
-    '<div class="roll-row"><button class="btn btn--fill" id="btnRumor">Roll (d10)</button></div>'+
-    '<div class="readout is-empty" id="rumorOutput">— awaiting query —</div>';
-  document.getElementById("btnRumor").addEventListener("click", function(){
-    var i = d10();
-    var el = document.getElementById("rumorOutput");
-    el.classList.remove("is-empty");
-    el.innerHTML = '<span class="rn">'+i+'</span>'+esc(RUMORS[i]);
-  });
-
-  document.getElementById("paneMerch").innerHTML =
-    '<div class="roll-row"><button class="btn btn--fill" id="btnMerch">Pull An Item</button></div>'+
-    '<div class="readout is-empty" id="merchOutput">— crate sealed —</div>';
-  document.getElementById("btnMerch").addEventListener("click", function(){
-    var el = document.getElementById("merchOutput");
-    el.classList.remove("is-empty");
-    el.textContent = pick(MERCH);
-  });
-
-  renderFlavours();
-  renderStates();
-  renderActions();
-  initTabs();
   renderSoundBtn();
   newMachine();
   renderLED();
