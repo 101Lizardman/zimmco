@@ -396,6 +396,44 @@
   }
   .view3d__hint .n{ color:var(--secondary); }
 
+  /* ---------- dispense toasts (top-centre, over the 3D display) ---------- */
+  .dispense-toasts{
+    position:fixed; top:14px; left:50%; transform:translateX(-50%);
+    z-index:25;
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+    width:min(420px, 92vw);
+    pointer-events:none;
+  }
+  .dispense-toast{
+    pointer-events:auto;
+    width:100%;
+    display:flex; align-items:flex-start; gap:10px;
+    background:var(--black); border:1px solid var(--secondary);
+    border-radius:8px; padding:10px 8px 10px 14px;
+    box-shadow:0 8px 24px rgba(0,0,0,.5);
+    transform:translateY(-18px); opacity:0;
+    transition:transform .25s ease, opacity .25s ease;
+  }
+  .dispense-toast.is-visible{ transform:translateY(0); opacity:1; }
+  .dispense-toast.is-leaving{ transform:translateY(-18px); opacity:0; }
+  @media (prefers-reduced-motion: reduce){ .dispense-toast{ transition:none; } }
+  .dispense-toast__body{ flex:1 1 auto; min-width:0; }
+  .dispense-toast__name{
+    font-family:'Oswald', sans-serif; font-weight:600; font-size:13px; letter-spacing:.03em; text-transform:uppercase;
+    color:var(--secondary);
+  }
+  .dispense-toast__effect{
+    font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--white-dim);
+    margin-top:3px; line-height:1.4;
+  }
+  .dispense-toast__close{
+    all:unset; cursor:pointer; flex:none;
+    color:var(--white-faint); font-size:17px; line-height:1;
+    padding:3px 7px; border-radius:5px;
+  }
+  .dispense-toast__close:hover{ color:var(--white); }
+  .dispense-toast__close:focus-visible{ outline:2px solid var(--secondary); outline-offset:2px; }
+
   /* ---------- admin: hotspot capture (local dev only, see index.html) ---------- */
   .admin-panel{
     position:fixed; top:10px; left:10px; z-index:22;
@@ -441,6 +479,7 @@
 </div>
 
 <div id="view3d" hidden>
+  <div class="dispense-toasts" id="dispenseToasts" aria-live="polite"></div>
   <p class="view3d__hint" id="view3dHint">Drag to orbit · scroll to zoom · click the coin slot to vend</p>
 </div>
 
@@ -1068,6 +1107,46 @@
 
   function setHint(text){ hint.textContent = text; }
 
+  // Top-centre toast for whatever was just dispensed. Stays up 15s or
+  // until closed by hand; stacks if you vend again before it clears.
+  function showDispenseToast(bev){
+    var container = document.getElementById("dispenseToasts");
+    var el = document.createElement("div");
+    el.className = "dispense-toast";
+
+    var body = document.createElement("div");
+    body.className = "dispense-toast__body";
+    var name = document.createElement("div");
+    name.className = "dispense-toast__name";
+    name.textContent = bev.name;
+    var effect = document.createElement("div");
+    effect.className = "dispense-toast__effect";
+    effect.textContent = bev.effect;
+    body.appendChild(name);
+    body.appendChild(effect);
+
+    var closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "dispense-toast__close";
+    closeBtn.setAttribute("aria-label", "Close");
+    closeBtn.textContent = "×";
+
+    el.appendChild(body);
+    el.appendChild(closeBtn);
+    container.appendChild(el);
+
+    requestAnimationFrame(function(){ el.classList.add("is-visible"); });
+
+    var autoTimer = setTimeout(dismiss, 15000);
+    function dismiss(){
+      clearTimeout(autoTimer);
+      el.classList.remove("is-visible");
+      el.classList.add("is-leaving");
+      setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 300);
+    }
+    closeBtn.addEventListener("click", dismiss);
+  }
+
   function init(){
     if(ready) return;
     ready = true;
@@ -1394,7 +1473,12 @@
         setHint("Insert coin…");
         if(!window.ZCMachine){ setHint("Machine logic not ready"); return; }
         window.ZCMachine.insertCoinAndVend(function(bev){
-          setHint(bev ? ('Dispensed "' + bev.name + '" — ' + bev.effect) : "Can't vend right now (locked or empty)");
+          if(bev){
+            setHint("Drag to orbit · scroll to zoom · click the coin slot to vend");
+            showDispenseToast(bev);
+          } else {
+            setHint("Can't vend right now (locked or empty)");
+          }
         });
       }
     }
