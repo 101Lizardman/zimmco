@@ -380,23 +380,7 @@
   }
   .tools-list li .n{ color:var(--white-faint); flex:none; }
 
-  /* ---------- view flag: classic DOM machine vs. 3D PoC ---------- */
-  .view-toggle{
-    all:unset;
-    position:fixed; top:10px; left:10px; z-index:22;
-    display:flex; align-items:center; gap:6px;
-    background:transparent; border:1px solid var(--secondary-soft);
-    color:var(--white-dim);
-    font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase;
-    padding:7px 11px;
-    border-radius:100px;
-    cursor:pointer;
-    box-shadow:0 2px 10px rgba(0,0,0,.4);
-  }
-  .view-toggle:hover{ border-color:var(--secondary); color:var(--white); }
-  .view-toggle:focus-visible{ outline:2px solid var(--secondary); outline-offset:2px; }
-  .view-toggle[aria-pressed="true"]{ background:var(--secondary); border-color:var(--secondary); color:var(--black); }
-
+  /* ---------- 3D view (the default view — no on-page toggle) ---------- */
   #view3d{
     position:fixed; inset:0; z-index:8;
     background:var(--black);
@@ -411,12 +395,53 @@
     pointer-events:none;
   }
   .view3d__hint .n{ color:var(--secondary); }
+
+  /* ---------- admin: hotspot capture (local dev only, see index.html) ---------- */
+  .admin-panel{
+    position:fixed; top:10px; left:10px; z-index:22;
+    max-width:260px;
+    background:var(--black); border:1px solid var(--secondary);
+    border-radius:8px; padding:10px 12px;
+    box-shadow:0 4px 16px rgba(0,0,0,.5);
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--white-dim);
+  }
+  .admin-panel__title{
+    font-family:'Oswald', sans-serif; font-weight:600; font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--secondary); margin-bottom:6px;
+  }
+  .admin-panel__btn{
+    all:unset; display:inline-block; cursor:pointer;
+    background:var(--secondary); color:var(--black);
+    font-family:'Oswald', sans-serif; font-weight:600; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase;
+    padding:6px 10px; border-radius:5px; margin-bottom:6px;
+  }
+  .admin-panel__btn:hover{ filter:brightness(1.08); }
+  .admin-panel__btn:focus-visible{ outline:2px solid var(--white); outline-offset:2px; }
+  .admin-panel__btn[disabled]{ background:var(--primary-shade); color:var(--white-faint); cursor:default; }
+  .admin-panel__hint{ margin:0; line-height:1.5; }
+
+  .admin-toast{
+    position:fixed; left:50%; bottom:64px; z-index:30;
+    transform:translateX(-50%) translateY(8px);
+    background:var(--secondary); color:var(--black);
+    font-family:'Oswald', sans-serif; font-weight:600; font-size:12.5px; letter-spacing:.04em; text-transform:uppercase;
+    padding:9px 16px; border-radius:8px;
+    opacity:0; transition:opacity .25s ease, transform .25s ease;
+    pointer-events:none;
+    box-shadow:0 6px 20px rgba(0,0,0,.45);
+  }
+  .admin-toast.is-visible{ opacity:1; transform:translateX(-50%) translateY(0); }
+  @media (prefers-reduced-motion: reduce){ .admin-toast{ transition:none; } }
 </style>
 
-<button type="button" class="view-toggle" id="viewToggle" aria-pressed="false">View: Machine</button>
+<div class="admin-panel" id="adminPanel" hidden>
+  <div class="admin-panel__title">Admin — Hotspot Capture</div>
+  <button type="button" class="admin-panel__btn" id="adminConnect">Connect Hotspot Folder</button>
+  <p class="admin-panel__hint" id="adminHint">Hold Left Ctrl and click 4 points on the model to define a zone.</p>
+</div>
 
 <div id="view3d" hidden>
-  <p class="view3d__hint" id="view3dHint">Drag to orbit · scroll to zoom · click a part — <span class="n">check the console for the mesh name</span></p>
+  <p class="view3d__hint" id="view3dHint">Drag to orbit · scroll to zoom · click the coin slot to vend</p>
 </div>
 
 <div class="stage">
@@ -739,6 +764,35 @@
     }, 500);
   }
 
+  // Same coin-drop + arming beat as insertCoin(), but for the 3D view's
+  // coin-slot hotspot: there's no individual flavour button to click yet
+  // (single merged mesh), so once armed it vends a random flavour from
+  // whatever the current unit stocks. Updates state and plays sound the
+  // same way dispense() does, but skips the classic view's DOM can/tray
+  // animation (that DOM is hidden while the 3D view is active) — instead
+  // it hands the dispensed beverage back via callback so the 3D view can
+  // show its own feedback.
+  function insertCoinAndVend(onDone){
+    if(coinState!=="idle" || machine.status==="lockdown" || machine.stores<=0){
+      if(onDone) onDone(null);
+      return;
+    }
+    coinState = "arming";
+    renderCoinSlot();
+    if(soundEnabled) playCoinDrop();
+    window.setTimeout(function(){
+      coinState = "armed";
+      var pool = availableBeverages(machine.range);
+      var bev = pool[Math.floor(Math.random() * pool.length)];
+      machine.stores -= 1;
+      coinState = "idle";
+      renderCoinSlot();
+      renderPad();
+      if(soundEnabled) playVoiceLine(bev.id);
+      if(onDone) onDone(bev);
+    }, 500);
+  }
+
   function renderPad(){
     var pad = document.getElementById("selectionPad");
     var locked = machine.status==="lockdown";
@@ -950,26 +1004,25 @@
 
   // Small handoff point for the separate 3D-view module script (view3d.js)
   // — it can't reach into this IIFE's closure directly.
-  window.ZCMachine = { clearAllCans: clearAllCans };
+  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend };
 
-  var viewToggle = document.getElementById("viewToggle");
+  // 3D is the default view, no on-page control for it. `?classic` in the
+  // URL is a dev-only escape hatch back to the DOM/CSS machine (e.g. for
+  // debugging state without the model loaded) — not a documented feature.
   var view3d = document.getElementById("view3d");
   var stage = document.querySelector(".stage");
-  var is3D = false;
-  viewToggle.addEventListener("click", function(){
-    is3D = !is3D;
-    viewToggle.setAttribute("aria-pressed", String(is3D));
-    viewToggle.textContent = is3D ? "View: 3D (PoC)" : "View: Machine";
-    if(is3D){
-      clearAllCans();
-      stage.hidden = true;
-      view3d.hidden = false;
-      if(window.ZC3D){ window.ZC3D.init(); window.ZC3D.resize(); }
-    } else {
-      view3d.hidden = true;
-      stage.hidden = false;
-    }
-  });
+  var wantsClassic = /[?&]classic\b/.test(location.search);
+  if(wantsClassic){
+    view3d.hidden = true;
+    stage.hidden = false;
+  } else {
+    stage.hidden = true;
+    view3d.hidden = false;
+    // view3d.js (a deferred module script) hasn't necessarily run yet at
+    // this point, so it can't be initialised from here — it checks this
+    // same visibility state itself, at the bottom of its own script, and
+    // self-initialises if it's already the active view.
+  }
 
   renderSoundBtn();
   newMachine();
@@ -1006,6 +1059,12 @@
   var scene, camera, renderer, controls, raycaster, pointer, model;
   var ready = false;
   var downPt = null;
+
+  // Admin mode: on by default on localhost, off everywhere else (so it
+  // never ships live to players) — override with ?admin=1 / ?admin=0.
+  var LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]", ""];
+  var adminParam = new URLSearchParams(location.search).get("admin");
+  var ADMIN_MODE = adminParam === "1" ? true : adminParam === "0" ? false : LOCAL_HOSTS.indexOf(location.hostname) !== -1;
 
   function setHint(text){ hint.textContent = text; }
 
@@ -1051,7 +1110,7 @@
         model = gltf.scene;
         scene.add(model);
         frameModel(model);
-        setHint("Drag to orbit · scroll to zoom · click a part — check the console for the mesh name");
+        setHint("Drag to orbit · scroll to zoom · click the coin slot to vend");
       },
       undefined,
       function(err){
@@ -1068,11 +1127,14 @@
       var moved = Math.hypot(e.clientX - downPt.x, e.clientY - downPt.y);
       downPt = null;
       if(moved > 6) return; // a drag (orbiting), not a click
+      if(ADMIN_MODE && ctrlHeld){ onAdminCaptureClick(e); return; }
       onClick(e);
     });
 
     window.addEventListener("resize", onResize);
     requestAnimationFrame(tick);
+
+    if(ADMIN_MODE) initAdmin();
   }
 
   function frameModel(obj){
@@ -1088,10 +1150,284 @@
     controls.update();
   }
 
-  // PoC-level click handling: report which mesh got hit. Once the model's
-  // parts are named for real (CoinSlot, Latch, Button_Klassic, ...), swap
-  // this switch for calls into the same handlers the classic DOM view
-  // uses (insertCoin(), pressLatch(), dispense(bev), ...).
+  /* ---------------------------------------------------------------------
+   * Admin: hotspot capture (local dev only — see ADMIN_MODE above)
+   *
+   * Hold left Ctrl and click 4 points on the model; on the 4th, the raw
+   * world-space points are written to hotspots/hotspot-N.json (via the
+   * File System Access API — Chrome/Edge only) and a toast confirms the
+   * number. Nothing here runs, or is even reachable, unless ADMIN_MODE is
+   * true. See hotspots/README.md for the full workflow and file format.
+   * ------------------------------------------------------------------- */
+  var ctrlHeld = false;
+  var capturePoints = [];
+  var captureMarkers = [];
+  var dirHandle = null;
+  var nextHotspotId = 1;
+
+  function toast(msg){
+    var el = document.createElement("div");
+    el.className = "admin-toast";
+    el.textContent = msg;
+    document.body.appendChild(el);
+    requestAnimationFrame(function(){ el.classList.add("is-visible"); });
+    setTimeout(function(){
+      el.classList.remove("is-visible");
+      setTimeout(function(){ el.remove(); }, 300);
+    }, 2600);
+  }
+
+  function idbOpen(){
+    return new Promise(function(resolve, reject){
+      var req = indexedDB.open("zc-admin", 1);
+      req.onupgradeneeded = function(){ req.result.createObjectStore("kv"); };
+      req.onsuccess = function(){ resolve(req.result); };
+      req.onerror = function(){ reject(req.error); };
+    });
+  }
+  function idbSet(key, val){
+    return idbOpen().then(function(db){
+      return new Promise(function(resolve, reject){
+        var tx = db.transaction("kv", "readwrite");
+        tx.objectStore("kv").put(val, key);
+        tx.oncomplete = resolve;
+        tx.onerror = function(){ reject(tx.error); };
+      });
+    });
+  }
+  function idbGet(key){
+    return idbOpen().then(function(db){
+      return new Promise(function(resolve, reject){
+        var tx = db.transaction("kv", "readonly");
+        var req = tx.objectStore("kv").get(key);
+        req.onsuccess = function(){ resolve(req.result); };
+        req.onerror = function(){ reject(req.error); };
+      });
+    });
+  }
+
+  function updateAdminHint(text){
+    var el = document.getElementById("adminHint");
+    if(el) el.textContent = text;
+  }
+
+  function updateAdminConnectBtn(){
+    var btn = document.getElementById("adminConnect");
+    if(!btn) return;
+    if(dirHandle){
+      btn.textContent = "Folder connected (" + dirHandle.name + ")";
+      btn.disabled = true;
+    } else {
+      btn.textContent = "Connect Hotspot Folder";
+      btn.disabled = false;
+    }
+  }
+
+  async function scanExistingHotspots(){
+    var max = 0;
+    for await (var entry of dirHandle.values()){
+      var m = /^hotspot-(\d+)\.json$/.exec(entry.name);
+      if(m) max = Math.max(max, parseInt(m[1], 10));
+    }
+    nextHotspotId = max + 1;
+  }
+
+  async function connectFolder(){
+    if(!window.showDirectoryPicker){
+      toast("Needs Chrome or Edge (File System Access API)");
+      return;
+    }
+    try{
+      dirHandle = await window.showDirectoryPicker({ id: "zc-hotspots", mode: "readwrite" });
+      await scanExistingHotspots();
+      updateAdminConnectBtn();
+      idbSet("zc-hotspots-dir", dirHandle).catch(function(){});
+    }catch(e){
+      console.warn("[admin] folder connect cancelled/failed:", e);
+    }
+  }
+
+  async function tryRestoreFolder(){
+    if(!window.showDirectoryPicker) return;
+    try{
+      var saved = await idbGet("zc-hotspots-dir");
+      if(!saved) return;
+      var perm = await saved.queryPermission({ mode: "readwrite" });
+      if(perm === "granted"){
+        dirHandle = saved;
+        await scanExistingHotspots();
+        updateAdminConnectBtn();
+      }
+      // if not granted, leave it — requestPermission() needs a user
+      // gesture, so it's re-requested from the Connect button instead
+    }catch(e){ /* ignore, they can just click Connect */ }
+  }
+
+  function markerMesh(hex, scale){
+    var geo = new THREE.SphereGeometry(0.018, 12, 12);
+    var mat = new THREE.MeshBasicMaterial({ color: hex, depthTest: false, transparent: true, opacity: 0.95 });
+    var m = new THREE.Mesh(geo, mat);
+    m.renderOrder = 999;
+    if(scale) m.scale.setScalar(scale);
+    return m;
+  }
+
+  async function saveHotspot(points){
+    if(!dirHandle){
+      toast("Connect a folder first");
+      updateAdminHint("Connect a folder (top-left) before capturing.");
+      return false;
+    }
+    var id = nextHotspotId++;
+    var data = {
+      id: id,
+      points: points.map(function(p){ return { x: p.x, y: p.y, z: p.z }; }),
+      createdAt: new Date().toISOString()
+    };
+    try{
+      var fileHandle = await dirHandle.getFileHandle("hotspot-" + id + ".json", { create: true });
+      var writable = await fileHandle.createWritable();
+      await writable.write(JSON.stringify(data, null, 2));
+      await writable.close();
+      toast("Hotspot #" + id + " saved");
+      console.log("[admin] saved hotspot-" + id + ".json", data);
+      return true;
+    }catch(e){
+      console.error("[admin] failed to save hotspot:", e);
+      toast("Save failed — see console");
+      nextHotspotId--; // give the number back, nothing was actually written
+      return false;
+    }
+  }
+
+  function onAdminCaptureClick(e){
+    var rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    var hits = model ? raycaster.intersectObject(model, true) : [];
+    if(!hits.length){
+      updateAdminHint("No surface hit — try again (" + capturePoints.length + "/4)");
+      return;
+    }
+    var pt = hits[0].point.clone();
+    capturePoints.push(pt);
+    var marker = markerMesh(0xf26521);
+    marker.position.copy(pt);
+    scene.add(marker);
+    captureMarkers.push(marker);
+
+    if(capturePoints.length < 4){
+      updateAdminHint("Point " + capturePoints.length + "/4 captured — hold Ctrl and click " + (4 - capturePoints.length) + " more");
+      return;
+    }
+
+    var pts = capturePoints.slice();
+    capturePoints = [];
+    captureMarkers.forEach(function(m){ scene.remove(m); });
+    captureMarkers = [];
+    updateAdminHint("Saving…");
+    saveHotspot(pts).then(function(saved){
+      updateAdminHint("Hold Left Ctrl and click 4 points on the model to define a zone.");
+      if(saved){
+        pts.forEach(function(p){
+          var m = markerMesh(0x888888, 0.6);
+          m.position.copy(p);
+          scene.add(m);
+        });
+      }
+    });
+  }
+
+  function initAdmin(){
+    document.getElementById("adminPanel").hidden = false;
+    document.getElementById("adminConnect").addEventListener("click", connectFolder);
+    tryRestoreFolder();
+
+    window.addEventListener("keydown", function(e){
+      if(e.key === "Control" && e.location === 1 && !ctrlHeld){
+        ctrlHeld = true;
+        if(controls) controls.enabled = false;
+        showHotspotHighlights();
+        updateAdminHint(capturePoints.length
+          ? ("Point " + capturePoints.length + "/4 captured — hold Ctrl and click " + (4 - capturePoints.length) + " more")
+          : "Ctrl held — click 4 points to define a zone.");
+      }
+    });
+    window.addEventListener("keyup", function(e){
+      if(e.key === "Control"){
+        ctrlHeld = false;
+        if(controls) controls.enabled = true;
+        hideHotspotHighlights();
+        if(capturePoints.length){
+          updateAdminHint("Capture cancelled (had " + capturePoints.length + "/4) — hold Ctrl and start again.");
+          captureMarkers.forEach(function(m){ scene.remove(m); });
+          captureMarkers = [];
+          capturePoints = [];
+        } else {
+          updateAdminHint("Hold Left Ctrl and click 4 points on the model to define a zone.");
+        }
+      }
+    });
+  }
+
+  // Hotspots: world-space points on the model tied to real actions. The
+  // current .glb is a single merged mesh with no per-part names to hang
+  // handlers off, so instead of switching on the clicked mesh's name, we
+  // compare the raycast hit point against a small set of known
+  // coordinates (found by clicking the rendered model and reading back
+  // the hit point — see vendor/three/README.md). Once the model has
+  // separately named meshes per part, this can switch to hits[0].object.name.
+  var HOTSPOTS = [
+    {
+      // Found by screenshotting the default-framed model and raycasting
+      // the pixel that looked like the coin/bill slot (the narrow vertical
+      // cutout below the red digital readout, above the button grid, in
+      // the machine's right-hand control column). If this feels off once
+      // you've seen it in the model, click around near there — every
+      // click logs its exact hit point to the console (the same way this
+      // number was found) — and swap this point in.
+      name: "coinSlot",
+      point: new THREE.Vector3(-0.673, 0.815, 0.038),
+      radius: 0.14,
+      action: function(){
+        setHint("Insert coin…");
+        if(!window.ZCMachine){ setHint("Machine logic not ready"); return; }
+        window.ZCMachine.insertCoinAndVend(function(bev){
+          setHint(bev ? ('Dispensed "' + bev.name + '" — ' + bev.effect) : "Can't vend right now (locked or empty)");
+        });
+      }
+    }
+  ];
+
+  // Admin aid: while Ctrl is held, show every entry in HOTSPOTS above as
+  // a translucent pink sphere so you can see exactly what's clickable and
+  // where, without needing to click each one to find out.
+  var hotspotHighlights = [];
+  function showHotspotHighlights(){
+    HOTSPOTS.forEach(function(h){
+      var m = new THREE.Mesh(
+        new THREE.SphereGeometry(h.radius, 20, 20),
+        new THREE.MeshBasicMaterial({ color: 0xff2ec4, transparent: true, opacity: 0.35, depthTest: false })
+      );
+      m.position.copy(h.point);
+      m.renderOrder = 998;
+      scene.add(m);
+      hotspotHighlights.push(m);
+    });
+  }
+  function hideHotspotHighlights(){
+    hotspotHighlights.forEach(function(m){ scene.remove(m); });
+    hotspotHighlights = [];
+  }
+
+  function nearestHotspot(point){
+    for(var i = 0; i < HOTSPOTS.length; i++){
+      if(point.distanceTo(HOTSPOTS[i].point) <= HOTSPOTS[i].radius) return HOTSPOTS[i];
+    }
+    return null;
+  }
+
   function onClick(e){
     var rect = renderer.domElement.getBoundingClientRect();
     pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -1099,9 +1435,16 @@
     raycaster.setFromCamera(pointer, camera);
     var hits = model ? raycaster.intersectObject(model, true) : [];
     if(hits.length){
-      var name = hits[0].object.name || "(unnamed mesh)";
-      console.log("[view3d] clicked:", name, hits[0].object);
-      setHint('Clicked: "' + name + '" — see the console for the full object');
+      var hit = hits[0];
+      console.log("[view3d] hit point:", hit.point.x.toFixed(3), hit.point.y.toFixed(3), hit.point.z.toFixed(3));
+      var spot = nearestHotspot(hit.point);
+      if(spot){
+        console.log("[view3d] hotspot:", spot.name);
+        setHint('"' + spot.name + '"');
+        spot.action();
+        return;
+      }
+      setHint('Clicked "' + (hit.object.name || "(unnamed mesh)") + '" — no hotspot there yet');
     } else {
       setHint("No part hit — try again");
     }
@@ -1120,5 +1463,17 @@
     renderer.render(scene, camera);
   }
 
-  window.ZC3D = { init: init, resize: onResize };
+  window.ZC3D = {
+    init: init,
+    resize: onResize,
+    // exposes scene internals for hotspot calibration in the console —
+    // e.g. window.ZC3D.debug().camera
+    debug: function(){ return { scene: scene, camera: camera, renderer: renderer, raycaster: raycaster, controls: controls, model: model, HOTSPOTS: HOTSPOTS }; }
+  };
+
+  // This module script always runs after the classic script (module
+  // scripts are deferred), so by now the classic script has already set
+  // container.hidden correctly for the default view / ?classic escape
+  // hatch — self-initialise if 3D is the one that should be showing.
+  if(!container.hidden) init();
 </script>
