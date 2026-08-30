@@ -1,17 +1,22 @@
 # ZimmCo Vending Unit
 
-An interactive prop and GM reference for the **ZimmCo Refreshment Vending Machine**, a module for the [Mothership RPG](https://www.tuesdayknightgames.com), written by Shane Vincent.
+An interactive prop for the **ZimmCo Refreshment Vending Machine**, a module for the [Mothership RPG](https://www.tuesdayknightgames.com), written by Shane Vincent.
 
-Single self-contained page — `index.html` has everything inlined (styles, data, script), so it can be opened directly or dropped on any static host with no build step.
+`index.html` is a self-contained page (styles, data, and script all inlined) — open it directly or drop it on any static host with no build step. The 3D view (see below) needs the page served over http(s) rather than opened as a `file://` URL.
 
 ## What it does
 
-- **Cabinet console** — roll up a machine (Durability, stock, flavour range), vend a random can or pick one from the pad, and track Opened / Hacked / Lock Down state as play happens.
-- **Beverage catalog** — all eight flavours with their effects.
-- **Rumor terminal** — d10 roll on the first-encounter rumor table.
-- **Machine states** — Opened / Hacked / Lock Down reference.
-- **Alternate actions** — expandable reference for Crack It Open, Hack the Mainframe, Tools (with its own drawer roll), Terminal, Transceiver, Proximity Sensor, Shelter, Jump Start, Lifesaver, and Fizzler.
-- **Merch crate** — pull a random piece of ZimmCo ephemera.
+- **Coin-gated vending** — press the coin slot to arm the machine, then pick a flavour from the pad; only what the current unit's range actually stocks is selectable.
+- **CRT-style display** with a durability gauge and a status light (green / flashing red in Lock Down).
+- **Physics-driven can dispenser** — a vended can falls, bounces once out of the opening, and can be dragged around with the mouse before it's removed.
+- **Latch mini-game** — clicking the small latch beside the coin slot climbs in pitch; the 10th press jams it, and pulls a random tool from the module's TOOLS table into a slide-out **Recovered Tools** panel.
+- **Sound** — a synthesised coin-drop and latch clicks (Web Audio, no audio files needed); optional per-flavour voice lines drop into `audio/voices/` (see that folder's README).
+
+## 3D view (proof of concept)
+
+The **View** toggle in the top-left corner switches between the classic DOM/CSS machine and a work-in-progress 3D view (`assets/vendingMachine.glb`, rendered with a locally vendored three.js — see `vendor/three/README.md`). It defaults to the classic view.
+
+Right now the 3D view proves the pipeline — load the model, orbit it, click a part and see which mesh got hit (logged to the console) — it isn't wired to the game logic yet. The current `.glb` is a single merged mesh, so every click reports the same object; splitting the model into separate named meshes per interactive part (coin slot, latch, each flavour button, ...) in Blender is the next step before individual clicks can drive `insertCoin()`, `pressLatch()`, `dispense(bev)`, etc.
 
 ## Running locally
 
@@ -25,7 +30,7 @@ Then open `http://localhost:4173`.
 
 ## Hosting
 
-Static single-file site — works as-is on GitHub Pages, Netlify, Vercel, Cloudflare Pages, or any static file host. Point the host at `index.html` in the repo root.
+Static site — works as-is on GitHub Pages, Netlify, Vercel, Cloudflare Pages, or any static file host that serves the repo over http(s) (needed for the 3D view's module scripts and model fetch). Point the host at `index.html` in the repo root.
 
 ## License
 

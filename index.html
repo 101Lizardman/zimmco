@@ -52,6 +52,7 @@
     justify-content:center;
     padding:0;
   }
+  .stage[hidden]{ display:none; }
 
   .cabinet{
     width:100%;
@@ -378,7 +379,45 @@
     display:flex; justify-content:space-between; gap:8px;
   }
   .tools-list li .n{ color:var(--white-faint); flex:none; }
+
+  /* ---------- view flag: classic DOM machine vs. 3D PoC ---------- */
+  .view-toggle{
+    all:unset;
+    position:fixed; top:10px; left:10px; z-index:22;
+    display:flex; align-items:center; gap:6px;
+    background:transparent; border:1px solid var(--secondary-soft);
+    color:var(--white-dim);
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase;
+    padding:7px 11px;
+    border-radius:100px;
+    cursor:pointer;
+    box-shadow:0 2px 10px rgba(0,0,0,.4);
+  }
+  .view-toggle:hover{ border-color:var(--secondary); color:var(--white); }
+  .view-toggle:focus-visible{ outline:2px solid var(--secondary); outline-offset:2px; }
+  .view-toggle[aria-pressed="true"]{ background:var(--secondary); border-color:var(--secondary); color:var(--black); }
+
+  #view3d{
+    position:fixed; inset:0; z-index:8;
+    background:var(--black);
+  }
+  #view3d[hidden]{ display:none; }
+  #view3d canvas{ display:block; width:100%; height:100%; }
+  .view3d__hint{
+    position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
+    z-index:9;
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--white-faint);
+    text-align:center; max-width:90vw;
+    pointer-events:none;
+  }
+  .view3d__hint .n{ color:var(--secondary); }
 </style>
+
+<button type="button" class="view-toggle" id="viewToggle" aria-pressed="false">View: Machine</button>
+
+<div id="view3d" hidden>
+  <p class="view3d__hint" id="view3dHint">Drag to orbit · scroll to zoom · click a part — <span class="n">check the console for the mesh name</span></p>
+</div>
 
 <div class="stage">
   <div class="cabinet" id="machine">
@@ -909,6 +948,29 @@
 
   window.addEventListener("resize", syncOpeningBackdrop);
 
+  // Small handoff point for the separate 3D-view module script (view3d.js)
+  // — it can't reach into this IIFE's closure directly.
+  window.ZCMachine = { clearAllCans: clearAllCans };
+
+  var viewToggle = document.getElementById("viewToggle");
+  var view3d = document.getElementById("view3d");
+  var stage = document.querySelector(".stage");
+  var is3D = false;
+  viewToggle.addEventListener("click", function(){
+    is3D = !is3D;
+    viewToggle.setAttribute("aria-pressed", String(is3D));
+    viewToggle.textContent = is3D ? "View: 3D (PoC)" : "View: Machine";
+    if(is3D){
+      clearAllCans();
+      stage.hidden = true;
+      view3d.hidden = false;
+      if(window.ZC3D){ window.ZC3D.init(); window.ZC3D.resize(); }
+    } else {
+      view3d.hidden = true;
+      stage.hidden = false;
+    }
+  });
+
   renderSoundBtn();
   newMachine();
   renderStatusIndicators();
@@ -917,4 +979,146 @@
   renderToolsPanel();
   syncOpeningBackdrop();
 })();
+</script>
+
+<!--
+  3D PoC — vendored three.js (see vendor/three/README.md), no CDN.
+  Lazy-initialised: nothing here loads or runs until the "View" toggle is
+  first switched to 3D, so the classic machine view has zero extra cost.
+  Requires the page to be served over http(s) (a local server, GitHub
+  Pages, etc.) — opened straight from disk as a file:// URL, the browser
+  will block the module and the GLB fetch.
+-->
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/build/three.module.js"
+  }
+}
+</script>
+<script type="module">
+  import * as THREE from "three";
+  import { GLTFLoader } from "./vendor/three/examples/jsm/loaders/GLTFLoader.js";
+  import { OrbitControls } from "./vendor/three/examples/jsm/controls/OrbitControls.js";
+
+  var container = document.getElementById("view3d");
+  var hint = document.getElementById("view3dHint");
+  var scene, camera, renderer, controls, raycaster, pointer, model;
+  var ready = false;
+  var downPt = null;
+
+  function setHint(text){ hint.textContent = text; }
+
+  function init(){
+    if(ready) return;
+    ready = true;
+
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x04070b); // matches --black
+
+    camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.05, 100);
+    camera.position.set(0, 1.4, 3.2);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    container.appendChild(renderer.domElement);
+
+    // Brand-only lighting: neutral fill + a warm secondary-orange rim, no
+    // colours outside the primary/secondary/neutral palette.
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x00294f, 1.1));
+    var key = new THREE.DirectionalLight(0xffffff, 1.7);
+    key.position.set(2, 3, 2);
+    scene.add(key);
+    var rim = new THREE.DirectionalLight(0xf26521, 0.55);
+    rim.position.set(-2.5, 1.2, -2);
+    scene.add(rim);
+
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.minDistance = 0.5;
+    controls.maxDistance = 10;
+    controls.target.set(0, 1, 0);
+
+    raycaster = new THREE.Raycaster();
+    pointer = new THREE.Vector2();
+
+    setHint("Loading assets/vendingMachine.glb…");
+    new GLTFLoader().load(
+      "assets/vendingMachine.glb",
+      function(gltf){
+        model = gltf.scene;
+        scene.add(model);
+        frameModel(model);
+        setHint("Drag to orbit · scroll to zoom · click a part — check the console for the mesh name");
+      },
+      undefined,
+      function(err){
+        console.error("[view3d] failed to load assets/vendingMachine.glb", err);
+        setHint("Could not load assets/vendingMachine.glb — this page needs to be served over http(s), not opened as a file:// URL. Check the console for details.");
+      }
+    );
+
+    renderer.domElement.addEventListener("pointerdown", function(e){
+      downPt = { x: e.clientX, y: e.clientY };
+    });
+    renderer.domElement.addEventListener("pointerup", function(e){
+      if(!downPt) return;
+      var moved = Math.hypot(e.clientX - downPt.x, e.clientY - downPt.y);
+      downPt = null;
+      if(moved > 6) return; // a drag (orbiting), not a click
+      onClick(e);
+    });
+
+    window.addEventListener("resize", onResize);
+    requestAnimationFrame(tick);
+  }
+
+  function frameModel(obj){
+    var box = new THREE.Box3().setFromObject(obj);
+    var size = box.getSize(new THREE.Vector3());
+    var center = box.getCenter(new THREE.Vector3());
+    var maxDim = Math.max(size.x, size.y, size.z) || 1;
+    camera.position.set(center.x, center.y + size.y * 0.15, center.z + maxDim * 1.6);
+    camera.near = maxDim / 100;
+    camera.far = maxDim * 100;
+    camera.updateProjectionMatrix();
+    controls.target.copy(center);
+    controls.update();
+  }
+
+  // PoC-level click handling: report which mesh got hit. Once the model's
+  // parts are named for real (CoinSlot, Latch, Button_Klassic, ...), swap
+  // this switch for calls into the same handlers the classic DOM view
+  // uses (insertCoin(), pressLatch(), dispense(bev), ...).
+  function onClick(e){
+    var rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    var hits = model ? raycaster.intersectObject(model, true) : [];
+    if(hits.length){
+      var name = hits[0].object.name || "(unnamed mesh)";
+      console.log("[view3d] clicked:", name, hits[0].object);
+      setHint('Clicked: "' + name + '" — see the console for the full object');
+    } else {
+      setHint("No part hit — try again");
+    }
+  }
+
+  function onResize(){
+    if(!ready || container.hidden) return;
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+  }
+
+  function tick(){
+    requestAnimationFrame(tick);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+
+  window.ZC3D = { init: init, resize: onResize };
 </script>
