@@ -1459,16 +1459,12 @@
   // separately named meshes per part, this can switch to hits[0].object.name.
   var HOTSPOTS = [
     {
-      // Found by screenshotting the default-framed model and raycasting
-      // the pixel that looked like the coin/bill slot (the narrow vertical
-      // cutout below the red digital readout, above the button grid, in
-      // the machine's right-hand control column). If this feels off once
-      // you've seen it in the model, click around near there — every
-      // click logs its exact hit point to the console (the same way this
-      // number was found) — and swap this point in.
+      // From hotspots/hotspot-1.json (admin capture, 4 corners of the
+      // coin slot): centroid of those points, radius = distance to the
+      // farthest corner (~0.164) plus a little slack for easier clicking.
       name: "coinSlot",
-      point: new THREE.Vector3(-0.673, 0.815, 0.038),
-      radius: 0.14,
+      point: new THREE.Vector3(-0.40477, 0.63296, -0.07135),
+      radius: 0.18,
       action: function(){
         setHint("Insert coin…");
         if(!window.ZCMachine){ setHint("Machine logic not ready"); return; }
