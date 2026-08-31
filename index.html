@@ -1325,7 +1325,7 @@
    * ------------------------------------------------------------------- */
   var CAN_TARGET_HEIGHT = 0.244; // 2x a real 12oz can's height (0.122m), in metres
   var CAN_GRAVITY = 6;
-  var CAN_RESTITUTION = 0.45;
+  var CAN_RESTITUTION = 0.3; // lower = heavier landing, less bouncy
 
   function v3(p){ return new THREE.Vector3(p.x, p.y, p.z); }
   function centroidOf(points){
@@ -1442,8 +1442,8 @@
         vel: new THREE.Vector3(Math.random()*0.15-0.075, 0, Math.random()*0.1-0.05),
         rotY: startRotY,
         angVelY: Math.random()*6-3,
-        wobbleX: Math.random()*3-1.5,
-        wobbleZ: Math.random()*3-1.5,
+        tipX: 0, tipZ: 0,
+        tipVelX: 0, tipVelZ: 0,
         bounced: false
       });
 
@@ -1465,7 +1465,10 @@
       b.pos.addScaledVector(b.vel, dt);
       b.rotY += b.angVelY * dt;
 
-      // Floor: one elastic bounce off the (tilted) plane, then ignored.
+      // Floor: one bounce off the (tilted) plane, then ignored. Heavy
+      // landing: a strong tipping torque in a random horizontal direction,
+      // so it's inclined to topple onto its side rather than staying
+      // upright.
       if(!b.bounced){
         var fd = b.pos.clone().sub(TRAY_FLOOR_PLANE.point).dot(TRAY_FLOOR_PLANE.normal);
         if(fd <= canRadius){
@@ -1475,9 +1478,18 @@
           b.vel.x += (Math.random() * 0.3 - 0.15);
           b.vel.z += (Math.random() * 0.15 - 0.075);
           b.angVelY *= 0.5;
+          var tipStrength = 3.2 + Math.random() * 2.4;
+          var tipDir = Math.random() * Math.PI * 2;
+          b.tipVelX = Math.cos(tipDir) * tipStrength;
+          b.tipVelZ = Math.sin(tipDir) * tipStrength;
           b.bounced = true;
         }
       }
+      b.tipX += b.tipVelX * dt;
+      b.tipZ += b.tipVelZ * dt;
+      var tipDamp = Math.max(0, 1 - 2.2 * dt);
+      b.tipVelX *= tipDamp;
+      b.tipVelZ *= tipDamp;
 
       // Walls: soft non-penetration only, no bounce-back, and only while
       // still plausibly inside the tray cavity.
@@ -1494,7 +1506,7 @@
       }
 
       b.obj.position.copy(b.pos);
-      b.obj.rotation.set(b.wobbleX * 0.3, b.rotY, b.wobbleZ * 0.3);
+      b.obj.rotation.set(b.tipX, b.rotY, b.tipZ);
     }
   }
 
