@@ -1300,6 +1300,205 @@
   }
 
   /* ---------------------------------------------------------------------
+   * Vended can: real 3D model + physics against the real tray geometry
+   *
+   * assets/tinyCan.glb loads once, gets recentred (its raw geometry has a
+   * large baked-in offset from its own origin) and uniformly scaled to a
+   * real can's height (122mm) based on its own measured bounding box —
+   * every time the file changes, this re-measures it fresh, so there's
+   * nothing to manually re-tune if the source model's size changes.
+   *
+   * The tray itself is defined from admin-captured hotspots, not guessed:
+   *   #2 spawn zone (top of the tray opening — NOT a click hotspot)
+   *   #3 floor (a tilted plane, back-high to front-low — the one bounce)
+   *   #4/#5/#6 left/back/right walls (soft, non-penetration only)
+   * See hotspots/*.json. The floor and walls are fit as planes (point +
+   * normal, normal sign resolved against the spawn centre so "interior"
+   * is unambiguous regardless of click order) rather than trusting a
+   * single flat Y, since the floor is visibly tilted.
+   *
+   * Depth-testing in a real 3D scene does the "hidden until it's out of
+   * the machine" work the old DOM version needed z-index tricks for, for
+   * free — no reveal logic needed. It falls from #2, bounces once off
+   * #3, then (walls aside) keeps falling freely and is removed after a
+   * few seconds — nothing stops it once it's below the tray.
+   * ------------------------------------------------------------------- */
+  var CAN_TARGET_HEIGHT = 0.244; // 2x a real 12oz can's height (0.122m), in metres
+  var CAN_GRAVITY = 6;
+  var CAN_RESTITUTION = 0.45;
+
+  function v3(p){ return new THREE.Vector3(p.x, p.y, p.z); }
+  function centroidOf(points){
+    var c = new THREE.Vector3();
+    points.forEach(function(p){ c.add(p); });
+    return c.divideScalar(points.length);
+  }
+  // Best-fit plane through 3 of the 4 points; normal sign is flipped, if
+  // needed, to point toward interiorRef -- so it doesn't matter what
+  // order the corners were clicked in.
+  function planeFromPoints(points, interiorRef){
+    var p0 = points[0], p1 = points[1], p2 = points[2];
+    var normal = new THREE.Vector3().subVectors(p1, p0).cross(new THREE.Vector3().subVectors(p2, p0)).normalize();
+    var point = centroidOf(points);
+    if(normal.dot(new THREE.Vector3().subVectors(interiorRef, point)) < 0) normal.negate();
+    return { point: point, normal: normal };
+  }
+
+  var TRAY_SPAWN_RAW = [
+    {x:-0.6837099426048581,y:-0.4267152622286587,z:0.020187512528904814},
+    {x:-0.6801202135042984,y:-0.42671526222865885,z:-0.19596553960769128},
+    {x:0.06053898375785495,y:-0.4267152622286587,z:-0.18757871559626352},
+    {x:0.060347495296003105,y:-0.4267152622286587,z:0.007036428471637242}
+  ].map(v3);
+  var TRAY_FLOOR_RAW = [
+    {x:-0.6846986134786595,y:-0.6909602503467702,z:-0.20262786800502125},
+    {x:-0.6865932416992067,y:-0.7712844284909347,z:0.01581626282858295},
+    {x:0.05353687538834129,y:-0.691832526994333,z:-0.20211932137778243},
+    {x:0.05377608545760386,y:-0.7746909390167477,z:0.0017986738974646872}
+  ].map(v3);
+  var TRAY_WALL_LEFT_RAW = [
+    {x:-0.6865932416992067,y:-0.4318059836914733,z:0.017664509687110527},
+    {x:-0.6840776994453678,y:-0.4322889112557777,z:-0.20262786800502164},
+    {x:-0.6813408622508732,y:-0.68822355593416,z:-0.20262786800502183},
+    {x:-0.6865932416992067,y:-0.7658570596527388,z:0.019296220946748963}
+  ].map(v3);
+  var TRAY_WALL_BACK_RAW = [
+    {x:-0.6833052994042574,y:-0.42861392731210635,z:-0.20262786800502164},
+    {x:-0.6832524989634979,y:-0.6837939496214902,z:-0.20262786800502203},
+    {x:0.048698027517662855,y:-0.689484461996897,z:-0.20262786800502156},
+    {x:0.06139867464527824,y:-0.4290790405885578,z:-0.20262786800502156}
+  ].map(v3);
+  var TRAY_WALL_RIGHT_RAW = [
+    {x:0.05397248196032379,y:-0.4302517646725127,z:-0.20262786800502117},
+    {x:0.04296719641311869,y:-0.6881615078688417,z:-0.20262786800502156},
+    {x:0.04731854828991016,y:-0.7756131074633906,z:0.02456761088449651},
+    {x:0.058112628703030585,y:-0.4241726335447652,z:0.024567610884495935}
+  ].map(v3);
+
+  var TRAY_SPAWN_CENTER = centroidOf(TRAY_SPAWN_RAW);
+  var TRAY_FLOOR_PLANE = planeFromPoints(TRAY_FLOOR_RAW, TRAY_SPAWN_CENTER);
+  var TRAY_WALLS = [
+    planeFromPoints(TRAY_WALL_LEFT_RAW, TRAY_SPAWN_CENTER),
+    planeFromPoints(TRAY_WALL_BACK_RAW, TRAY_SPAWN_CENTER),
+    planeFromPoints(TRAY_WALL_RIGHT_RAW, TRAY_SPAWN_CENTER)
+  ];
+  // Walls only apply near the tray cavity itself -- once the can has
+  // fallen well below it (after the bounce arcs it back down), these are
+  // no longer real physical walls in its path and should stop applying.
+  var TRAY_WALL_MIN_Y = Math.min.apply(null, TRAY_FLOOR_RAW.map(function(p){ return p.y; })) - 0.1;
+
+  var canTemplate = null;
+  var canTemplateLoading = false;
+  var canRadius = 0.05; // overwritten with a real measurement once the model loads
+  var cans3D = [];
+
+  function loadCanTemplate(cb){
+    if(canTemplate){ cb(canTemplate); return; }
+    if(canTemplateLoading){ window.setTimeout(function(){ loadCanTemplate(cb); }, 100); return; }
+    canTemplateLoading = true;
+    new GLTFLoader().load(
+      "assets/tinyCan.glb",
+      function(gltf){
+        var raw = gltf.scene;
+        var box = new THREE.Box3().setFromObject(raw);
+        var size = box.getSize(new THREE.Vector3());
+        var center = box.getCenter(new THREE.Vector3());
+        raw.position.sub(center); // recentre so the bbox centre sits at local (0,0,0)
+        var scale = CAN_TARGET_HEIGHT / (size.y || 1);
+        var group = new THREE.Group();
+        group.add(raw);
+        group.scale.setScalar(scale);
+        canTemplate = group;
+        canRadius = ((size.x + size.z) / 4) * scale; // avg of the X/Z half-extents, scaled
+        canTemplateLoading = false;
+        cb(canTemplate);
+      },
+      undefined,
+      function(err){
+        console.error("[view3d] failed to load assets/tinyCan.glb", err);
+        canTemplateLoading = false;
+        cb(null);
+      }
+    );
+  }
+
+  function spawnCan3D(){
+    loadCanTemplate(function(template){
+      if(!template) return;
+      var inst = template.clone(true);
+      var startPos = new THREE.Vector3(
+        TRAY_SPAWN_CENTER.x + (Math.random() * 0.06 - 0.03),
+        TRAY_SPAWN_CENTER.y,
+        TRAY_SPAWN_CENTER.z + (Math.random() * 0.04 - 0.02)
+      );
+      inst.position.copy(startPos);
+      var startRotY = Math.random() * Math.PI * 2;
+      inst.rotation.set(0, startRotY, 0);
+      scene.add(inst);
+
+      cans3D.push({
+        obj: inst,
+        pos: startPos.clone(),
+        vel: new THREE.Vector3(Math.random()*0.15-0.075, 0, Math.random()*0.1-0.05),
+        rotY: startRotY,
+        angVelY: Math.random()*6-3,
+        wobbleX: Math.random()*3-1.5,
+        wobbleZ: Math.random()*3-1.5,
+        bounced: false
+      });
+
+      window.setTimeout(function(){ removeCan3D(inst); }, 6000);
+    });
+  }
+
+  function removeCan3D(obj){
+    var idx = -1;
+    for(var i=0;i<cans3D.length;i++){ if(cans3D[i].obj === obj){ idx = i; break; } }
+    if(idx > -1) cans3D.splice(idx, 1);
+    if(obj.parent) obj.parent.remove(obj);
+  }
+
+  function stepCans3D(dt){
+    for(var i=cans3D.length-1; i>=0; i--){
+      var b = cans3D[i];
+      b.vel.y -= CAN_GRAVITY * dt;
+      b.pos.addScaledVector(b.vel, dt);
+      b.rotY += b.angVelY * dt;
+
+      // Floor: one elastic bounce off the (tilted) plane, then ignored.
+      if(!b.bounced){
+        var fd = b.pos.clone().sub(TRAY_FLOOR_PLANE.point).dot(TRAY_FLOOR_PLANE.normal);
+        if(fd <= canRadius){
+          b.pos.addScaledVector(TRAY_FLOOR_PLANE.normal, canRadius - fd);
+          var fvn = b.vel.dot(TRAY_FLOOR_PLANE.normal);
+          if(fvn < 0) b.vel.addScaledVector(TRAY_FLOOR_PLANE.normal, -(1 + CAN_RESTITUTION) * fvn);
+          b.vel.x += (Math.random() * 0.3 - 0.15);
+          b.vel.z += (Math.random() * 0.15 - 0.075);
+          b.angVelY *= 0.5;
+          b.bounced = true;
+        }
+      }
+
+      // Walls: soft non-penetration only, no bounce-back, and only while
+      // still plausibly inside the tray cavity.
+      if(b.pos.y > TRAY_WALL_MIN_Y){
+        for(var w=0; w<TRAY_WALLS.length; w++){
+          var wall = TRAY_WALLS[w];
+          var wd = b.pos.clone().sub(wall.point).dot(wall.normal);
+          if(wd <= canRadius){
+            b.pos.addScaledVector(wall.normal, canRadius - wd);
+            var wvn = b.vel.dot(wall.normal);
+            if(wvn < 0) b.vel.addScaledVector(wall.normal, -wvn);
+          }
+        }
+      }
+
+      b.obj.position.copy(b.pos);
+      b.obj.rotation.set(b.wobbleX * 0.3, b.rotY, b.wobbleZ * 0.3);
+    }
+  }
+
+  /* ---------------------------------------------------------------------
    * Admin: hotspot capture (local dev only — see ADMIN_MODE above)
    *
    * Hold left Ctrl and click 4 points on the model; on the 4th, the raw
@@ -1545,6 +1744,7 @@
         window.ZCMachine.insertCoinAndVend(function(bev){
           if(bev){
             setHint("Drag to orbit · scroll to zoom · click the coin slot to vend");
+            spawnCan3D();
             showDispenseToast(bev);
           } else {
             setHint("Can't vend right now (locked or empty)");
@@ -1626,8 +1826,12 @@
     renderer.setSize(container.clientWidth, container.clientHeight);
   }
 
-  function tick(){
+  var lastTickT = null;
+  function tick(t){
     requestAnimationFrame(tick);
+    var dt = lastTickT===null ? 0 : Math.min((t - lastTickT) / 1000, 0.05);
+    lastTickT = t;
+    if(cans3D.length) stepCans3D(dt);
     controls.update();
     renderer.render(scene, camera);
   }
@@ -1637,7 +1841,7 @@
     resize: onResize,
     // exposes scene internals for hotspot calibration in the console —
     // e.g. window.ZC3D.debug().camera
-    debug: function(){ return { scene: scene, camera: camera, renderer: renderer, raycaster: raycaster, controls: controls, model: model, HOTSPOTS: HOTSPOTS }; }
+    debug: function(){ return { scene: scene, camera: camera, renderer: renderer, raycaster: raycaster, controls: controls, model: model, HOTSPOTS: HOTSPOTS, cans3D: cans3D, spawnCan3D: spawnCan3D, TRAY_SPAWN_CENTER: TRAY_SPAWN_CENTER, TRAY_FLOOR_PLANE: TRAY_FLOOR_PLANE, TRAY_WALLS: TRAY_WALLS, canRadius: canRadius }; }
   };
 
   // This module script always runs after the classic script (module
