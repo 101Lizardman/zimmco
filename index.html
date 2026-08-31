@@ -313,6 +313,8 @@
     font-family:'IBM Plex Mono', monospace; font-size:9px; color:var(--white-faint);
     line-height:1.6; text-align:center;
   }
+  footer a{ color:var(--secondary); }
+  footer .credits{ display:block; margin-top:6px; }
 
   /* ---------- tools drawer (slide-out side panel) ---------- */
   .tools-tab{
@@ -387,14 +389,22 @@
   }
   #view3d[hidden]{ display:none; }
   #view3d canvas{ display:block; width:100%; height:100%; }
-  .view3d__hint{
-    position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
+  .view3d__foot{
+    position:fixed; left:50%; bottom:8px; transform:translateX(-50%);
     z-index:9;
-    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--white-faint);
-    text-align:center; max-width:90vw;
+    text-align:center; max-width:94vw;
     pointer-events:none;
   }
+  .view3d__hint{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--white-faint);
+  }
   .view3d__hint .n{ color:var(--secondary); }
+  .view3d__credits{
+    margin-top:5px;
+    font-family:'IBM Plex Mono', monospace; font-size:8.5px; line-height:1.6;
+    color:var(--white-faint); opacity:.8;
+  }
+  .view3d__credits a{ color:var(--secondary); pointer-events:auto; }
 
   /* ---------- dispense toasts (top-centre, over the 3D display) ---------- */
   .dispense-toasts{
@@ -480,7 +490,13 @@
 
 <div id="view3d" hidden>
   <div class="dispense-toasts" id="dispenseToasts" aria-live="polite"></div>
-  <p class="view3d__hint" id="view3dHint">Drag to orbit · scroll to zoom · click the coin slot to vend</p>
+  <div class="view3d__foot">
+    <p class="view3d__hint" id="view3dHint">Drag to orbit · scroll to zoom · click the coin slot to vend</p>
+    <p class="view3d__credits">
+      ZimmCo Refreshment Beverages — a Mothership RPG prop, written by Shane Vincent. Based on the Mothership® Sci-Fi Horror RPG, published by Tuesday Knight Games, under license.<br>
+      Vending machine model by <a href="https://sketchfab.com/3d-models/kiosk-machine-retro-horror-vending-automat-300c0c705eea4c0f9d510021c847646f" target="_blank" rel="noopener">ZwiebelGames</a> · SFX by <a href="https://pixabay.com/sound-effects/film-special-effects-vending-machine-action-61196/" target="_blank" rel="noopener">Kyodon</a>
+    </p>
+  </div>
 </div>
 
 <div class="stage">
@@ -538,6 +554,7 @@
 
 <footer>
   ZimmCo Refreshment Beverages — a Mothership RPG prop, written by Shane Vincent. Based on the Mothership® Sci-Fi Horror Role Playing Game, published by Tuesday Knight Games, under license. MOTHERSHIP® is a registered trademark of Tuesday Knight Games. tuesdayknightgames.com
+  <span class="credits">Vending machine model by <a href="https://sketchfab.com/3d-models/kiosk-machine-retro-horror-vending-automat-300c0c705eea4c0f9d510021c847646f" target="_blank" rel="noopener">ZwiebelGames</a> · SFX by <a href="https://pixabay.com/sound-effects/film-special-effects-vending-machine-action-61196/" target="_blank" rel="noopener">Kyodon</a></span>
 </footer>
 
 <button type="button" class="tools-tab" id="toolsTab" aria-expanded="false" aria-controls="toolsPanel">
@@ -572,8 +589,10 @@
 
   /* ---------------------------------------------------------------------
    * Sound framework
-   * - Coin-drop SFX is synthesised with the Web Audio API, so it needs no
-   *   audio asset and always works.
+   * - Coin-drop and can-drop SFX play from assets/sfx/coinDrop.mp3 and
+   *   assets/sfx/canDrop.mp3 (courtesy of Kyodon — see the credits in the
+   *   footer). Latch clicks and the jam "clunk" are still synthesised
+   *   with the Web Audio API, since there's no asset for those.
    * - Voice lines are looked up by beverage id from VOICE_BASE + "<id>.mp3".
    *   No files are shipped yet — drop recordings into audio/voices/ using
    *   the beverage ids below (klassic, atomka, hammer, frost, geiger,
@@ -597,30 +616,16 @@
     return audioCtx;
   }
 
-  function playCoinDrop(){
-    var ctx = ensureAudioCtx();
-    if(!ctx) return;
-    var now = ctx.currentTime;
-    var clinks = [
-      { t:0.00, f:2200, d:0.07, g:0.16, type:"triangle" },
-      { t:0.08, f:1600, d:0.08, g:0.14, type:"triangle" },
-      { t:0.17, f:1150, d:0.09, g:0.12, type:"triangle" },
-      { t:0.27, f:220,  d:0.14, g:0.18, type:"sine" }
-    ];
-    clinks.forEach(function(c){
-      var osc = ctx.createOscillator();
-      var gain = ctx.createGain();
-      osc.type = c.type;
-      osc.frequency.setValueAtTime(c.f, now + c.t);
-      osc.frequency.exponentialRampToValueAtTime(Math.max(40, c.f * 0.55), now + c.t + c.d);
-      gain.gain.setValueAtTime(0.0001, now + c.t);
-      gain.gain.exponentialRampToValueAtTime(c.g, now + c.t + 0.006);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + c.t + c.d);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(now + c.t);
-      osc.stop(now + c.t + c.d + 0.02);
-    });
+  function playSfx(path){
+    try{
+      var audio = new Audio(path);
+      audio.volume = 0.85;
+      var p = audio.play();
+      if(p && p.catch) p.catch(function(){ /* ignore — e.g. blocked before any user gesture */ });
+    }catch(e){ /* ignore */ }
   }
+  function playCoinDrop(){ playSfx("assets/sfx/coinDrop.mp3"); }
+  function playCanDrop(){ playSfx("assets/sfx/canDrop.mp3"); }
 
   function playLatchClick(freq){
     var ctx = ensureAudioCtx();
@@ -827,7 +832,7 @@
       coinState = "idle";
       renderCoinSlot();
       renderPad();
-      if(soundEnabled) playVoiceLine(bev.id);
+      if(soundEnabled){ playCanDrop(); playVoiceLine(bev.id); }
       if(onDone) onDone(bev);
     }, 500);
   }
@@ -1009,7 +1014,7 @@
     coinState = "idle";
     renderPad();
     renderCoinSlot();
-    if(soundEnabled) playVoiceLine(bev.id);
+    if(soundEnabled){ playCanDrop(); playVoiceLine(bev.id); }
   }
 
   // ---- wire up ----
