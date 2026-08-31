@@ -342,6 +342,8 @@
   /* Hacked-terminal actions tab -- green like the crit-success toast,
      the one other deliberate exception to the brand-only palette. */
   .side-tab--hacked{ background:#2ecc71; }
+  /* Exposed internals -- plain steel grey, not one of the state-alert colours. */
+  .side-tab--internals{ background:var(--white); }
   .side-tab__count{
     writing-mode:horizontal-tb;
     background:var(--black);
@@ -730,6 +732,9 @@
   <button type="button" class="side-tab side-tab--hacked" id="hackedTab" aria-expanded="false" aria-controls="sidePanel" hidden>
     Hacked
   </button>
+  <button type="button" class="side-tab side-tab--internals" id="internalsTab" aria-expanded="false" aria-controls="sidePanel" hidden>
+    Internals
+  </button>
 </div>
 <div class="side-backdrop" id="sideBackdrop" hidden></div>
 <aside class="side-panel" id="sidePanel" aria-hidden="true" aria-label="Session log">
@@ -1069,6 +1074,7 @@
     renderPad();
     renderCoinSlot();
     updateHackedTabVisibility();
+    updateInternalsTabVisibility();
   }
 
   /* -----------------------------------------------------------------
@@ -1262,8 +1268,8 @@
     });
   }
 
-  var SIDE_PANEL_TITLES = { tools: "Recovered Tools", drinks: "Dispensed Drinks", hacked: "Hacked Terminal Actions" };
-  var SIDE_PANEL_RENDERERS = { tools: renderToolsList, drinks: renderDrinksList, hacked: renderHackedList };
+  var SIDE_PANEL_TITLES = { tools: "Recovered Tools", drinks: "Dispensed Drinks", hacked: "Hacked Terminal Actions", internals: "Exposed Internals" };
+  var SIDE_PANEL_RENDERERS = { tools: renderToolsList, drinks: renderDrinksList, hacked: renderHackedList, internals: renderInternalsList };
 
   // One shared slide-out panel for all tabs; opening any of them renders
   // its content into it and switches the panel to that mode.
@@ -1280,6 +1286,7 @@
     document.getElementById("drinksTab").setAttribute("aria-expanded", String(open && sidePanelMode==="drinks"));
     document.getElementById("toolsTab").setAttribute("aria-expanded", String(open && sidePanelMode==="tools"));
     document.getElementById("hackedTab").setAttribute("aria-expanded", String(open && sidePanelMode==="hacked"));
+    document.getElementById("internalsTab").setAttribute("aria-expanded", String(open && sidePanelMode==="internals"));
     var backdrop = document.getElementById("sideBackdrop");
     backdrop.classList.toggle("is-open", open);
     backdrop.hidden = !open;
@@ -1290,6 +1297,18 @@
   // same "don't advertise it before it's relevant" idea as the Tools tab.
   function updateHackedTabVisibility(){
     document.getElementById("hackedTab").hidden = machine.status !== "hacked";
+  }
+
+  // Nothing here yet -- placeholder for whatever an opened machine's
+  // exposed internals will eventually let the player do.
+  function renderInternalsList(){
+    document.getElementById("sideList").innerHTML =
+      '<li class="side-list__empty" style="background:none;border:none;padding:0;">No actions available yet.</li>';
+  }
+
+  // Same idea as the Hacked tab, but for the Opened state.
+  function updateInternalsTabVisibility(){
+    document.getElementById("internalsTab").hidden = machine.status !== "opened";
   }
 
   function addDispensedDrink(bev){
@@ -1570,6 +1589,7 @@
   document.getElementById("drinksTab").addEventListener("click", function(){ openSidePanel("drinks"); });
   document.getElementById("toolsTab").addEventListener("click", function(){ openSidePanel("tools"); });
   document.getElementById("hackedTab").addEventListener("click", function(){ openSidePanel("hacked"); });
+  document.getElementById("internalsTab").addEventListener("click", function(){ openSidePanel("internals"); });
   document.getElementById("sideClose").addEventListener("click", function(){ setSidePanelOpen(false); });
   document.getElementById("sideBackdrop").addEventListener("click", function(){ setSidePanelOpen(false); });
   document.getElementById("btnNewUnit").addEventListener("click", function(){
@@ -1579,6 +1599,7 @@
     renderPad();
     renderCoinSlot();
     updateHackedTabVisibility();
+    updateInternalsTabVisibility();
   });
   document.getElementById("btnSound").addEventListener("click", function(){
     setSoundEnabled(!soundEnabled);
@@ -1630,6 +1651,7 @@
   renderCoinSlot();
   updateSideTabCounts();
   updateHackedTabVisibility();
+  updateInternalsTabVisibility();
   syncOpeningBackdrop();
 })();
 </script>
