@@ -1653,13 +1653,12 @@
   function useJumpStartTile(tile){
     openStatCheckModal("Jump Start", "Enter INTELLECT stat (+ skill bonuses) — rolled with disadvantage", true, function(result, stat){
       tile.disabled = true; // one-shot regardless of outcome
-      var rollsText = "Rolled " + result.rolls.join(" & ") + " (disadvantage, lowest kept) vs stat " + stat + ".";
       if(result.success){
-        showResultToast("dispense-toast--success", "Capacitor Bank Shorted", rollsText + " Objective fulfilled.");
+        showResultToast("dispense-toast--success", "Capacitor Bank Shorted", "Objective fulfilled.");
       } else {
         var dmg = Math.floor(Math.random() * 6) + 1; // d6 explosion damage
         setMachineStatus("lockdown");
-        showResultToast("dispense-toast--failure", "Capacitor Bank Exploded", rollsText + " " + dmg + " explosion damage.");
+        showResultToast("dispense-toast--failure", "Capacitor Bank Exploded", dmg + " explosion damage.");
       }
       // Durability is wrecked either way, success or failure.
       machine.durability = 0;
