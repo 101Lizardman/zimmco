@@ -826,6 +826,25 @@
   function playCoinDrop(){ playSfx("assets/sfx/coinDrop.mp3"); }
   function playCanDrop(){ playSfx("assets/sfx/canDrop.mp3"); }
   function playHum(){ playSfx("assets/sfx/hum.mp3"); }
+  function playAlarm(){ playSfx("assets/sfx/alarm.mp3"); }
+
+  // Lock Down alarm: fires immediately on entering lockdown, then every
+  // 10s for as long as it stays in effect. Re-checked (not rebuilt) by
+  // updateAlarmLoop() so muting mid-lockdown just silences future ticks
+  // rather than needing the loop restarted.
+  var alarmIntervalId = null;
+  function updateAlarmLoop(){
+    if(machine.lockdown){
+      if(alarmIntervalId !== null) return; // already running
+      if(soundEnabled) playAlarm();
+      alarmIntervalId = window.setInterval(function(){
+        if(soundEnabled) playAlarm();
+      }, 10000);
+    } else if(alarmIntervalId !== null){
+      window.clearInterval(alarmIntervalId);
+      alarmIntervalId = null;
+    }
+  }
 
   // Soft, muffled "denied" noise for pressing the coin slot when the
   // machine can't vend (opened / hacked-and-open / lockdown / out of stock)
@@ -1071,6 +1090,7 @@
     latchClicks = 0;
     latchLocked = false;
     document.getElementById("coinLatch").disabled = false;
+    updateAlarmLoop();
   }
 
   // Priority label for the single-word displays (status light colour,
@@ -1104,6 +1124,7 @@
     renderCoinSlot();
     updateHackedTabVisibility();
     updateInternalsTabVisibility();
+    updateAlarmLoop();
   }
 
   /* -----------------------------------------------------------------
