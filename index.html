@@ -1187,6 +1187,7 @@
       "assets/vendingMachine.glb",
       function(gltf){
         model = gltf.scene;
+        model.rotation.y = Math.PI; // the model faces backwards on load — turn it around
         scene.add(model);
         frameModel(model);
         setHint("Drag to orbit · scroll to zoom · click the coin slot to vend");
@@ -1462,8 +1463,12 @@
       // From hotspots/hotspot-1.json (admin capture, 4 corners of the
       // coin slot): centroid of those points, radius = distance to the
       // farthest corner (~0.164) plus a little slack for easier clicking.
+      // Captured before the model.rotation.y = Math.PI fix above, so x
+      // and z are negated here to match (a 180° turn around Y mirrors
+      // both) -- if you capture new hotspots now, they come out already
+      // correct and need no such adjustment.
       name: "coinSlot",
-      point: new THREE.Vector3(-0.40477, 0.63296, -0.07135),
+      point: new THREE.Vector3(0.40477, 0.63296, 0.07135),
       radius: 0.18,
       action: function(){
         setHint("Insert coin…");
