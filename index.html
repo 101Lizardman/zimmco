@@ -1736,6 +1736,7 @@
   var container = document.getElementById("view3d");
   var hint = document.getElementById("view3dHint");
   var scene, camera, renderer, controls, raycaster, pointer, model;
+  var sceneHemiLight, sceneKeyLight, sceneRimLight; // scene-wide fill/key/rim -- washed red during Lock Down
   var statusLights = []; // { light, normalColor } for every light found in the model
   var MAX_SPARKS = 90; // lockdown alarm's spark system size; see createSparkSystem
   var lockdownLightWasOn = false; // edge-detect the alarm blink to time spark bursts
@@ -1819,14 +1820,17 @@
     container.appendChild(renderer.domElement);
 
     // Brand-only lighting: neutral fill + a warm secondary-orange rim, no
-    // colours outside the primary/secondary/neutral palette.
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x00294f, 1.1));
-    var key = new THREE.DirectionalLight(0xffffff, 1.7);
-    key.position.set(2, 3, 2);
-    scene.add(key);
-    var rim = new THREE.DirectionalLight(0xf26521, 0.55);
-    rim.position.set(-2.5, 1.2, -2);
-    scene.add(rim);
+    // colours outside the primary/secondary/neutral palette -- except
+    // during Lock Down, where stepSceneLighting() below washes all three
+    // red as a deliberate alarm-state exception.
+    sceneHemiLight = new THREE.HemisphereLight(0xffffff, 0x00294f, 1.1);
+    scene.add(sceneHemiLight);
+    sceneKeyLight = new THREE.DirectionalLight(0xffffff, 1.7);
+    sceneKeyLight.position.set(2, 3, 2);
+    scene.add(sceneKeyLight);
+    sceneRimLight = new THREE.DirectionalLight(0xf26521, 0.55);
+    sceneRimLight.position.set(-2.5, 1.2, -2);
+    scene.add(sceneRimLight);
 
     initSparkSystem();
 
@@ -2675,6 +2679,19 @@
     lockdownLightWasOn = lockdown && on;
   }
 
+  // Scene-wide fill/key/rim lights wash solid red for as long as Lock
+  // Down holds (no blink -- that's the status light's job), and revert
+  // the moment it's lifted.
+  var SCENE_LIGHT_RED = 0xff2020;
+  var SCENE_LIGHT_RED_DARK = 0x3a0000;
+  function stepSceneLighting(){
+    var lockdown = !!(window.ZCMachine && window.ZCMachine.isLockdown());
+    sceneHemiLight.color.setHex(lockdown ? SCENE_LIGHT_RED : 0xffffff);
+    sceneHemiLight.groundColor.setHex(lockdown ? SCENE_LIGHT_RED_DARK : 0x00294f);
+    sceneKeyLight.color.setHex(lockdown ? SCENE_LIGHT_RED : 0xffffff);
+    sceneRimLight.color.setHex(lockdown ? SCENE_LIGHT_RED : 0xf26521);
+  }
+
   var lastTickT = null;
   function tick(t){
     requestAnimationFrame(tick);
@@ -2682,6 +2699,7 @@
     lastTickT = t;
     if(cans3D.length) stepCans3D(dt);
     stepStatusLights(t);
+    stepSceneLighting();
     stepSparks(dt);
     controls.update();
     renderer.render(scene, camera);
