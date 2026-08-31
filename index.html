@@ -481,6 +481,9 @@
   .admin-panel__btn:focus-visible{ outline:2px solid var(--white); outline-offset:2px; }
   .admin-panel__btn[disabled]{ background:var(--primary-shade); color:var(--white-faint); cursor:default; }
   .admin-panel__hint{ margin:0; line-height:1.5; }
+  .admin-panel__states{ display:flex; flex-wrap:wrap; gap:6px; }
+  .admin-panel__states .admin-panel__btn{ margin-bottom:0; background:var(--primary); color:var(--white); }
+  .admin-panel__states .admin-panel__btn.is-active{ background:var(--secondary); color:var(--black); }
 
   .admin-toast{
     position:fixed; left:50%; bottom:64px; z-index:30;
@@ -500,6 +503,13 @@
   <div class="admin-panel__title">Admin — Hotspot Capture</div>
   <button type="button" class="admin-panel__btn" id="adminConnect">Connect Hotspot Folder</button>
   <p class="admin-panel__hint" id="adminHint">Hold Left Ctrl and click 4 points on the model to define a zone.</p>
+  <div class="admin-panel__title" style="margin-top:10px;">Force Machine State</div>
+  <div class="admin-panel__states" id="adminStates">
+    <button type="button" class="admin-panel__btn" data-status="operational">Operational</button>
+    <button type="button" class="admin-panel__btn" data-status="opened">Opened</button>
+    <button type="button" class="admin-panel__btn" data-status="hacked">Hacked</button>
+    <button type="button" class="admin-panel__btn" data-status="lockdown">Lock Down</button>
+  </div>
 </div>
 
 <div id="view3d" hidden>
@@ -649,6 +659,35 @@
   function playCanDrop(){ playSfx("assets/sfx/canDrop.mp3"); }
   function playHum(){ playSfx("assets/sfx/hum.mp3"); }
 
+  // Soft, muffled "denied" noise for pressing the coin slot when the
+  // machine can't vend (opened / hacked-and-open / lockdown / out of stock)
+  // -- a lowpassed noise burst, distinct from the latch's metal clunk.
+  function playSoftCrunch(){
+    var ctx = ensureAudioCtx();
+    if(!ctx) return;
+    var now = ctx.currentTime;
+    var dur = 0.14;
+    var bufSize = Math.max(1, Math.round(ctx.sampleRate * dur));
+    var buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+    var data = buffer.getChannelData(0);
+    for(var i=0;i<bufSize;i++){
+      var decay = 1 - (i / bufSize);
+      data[i] = (Math.random()*2 - 1) * decay * decay;
+    }
+    var src = ctx.createBufferSource();
+    src.buffer = buffer;
+    var filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(900, now);
+    var gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.3, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    src.connect(filter).connect(gain).connect(ctx.destination);
+    src.start(now);
+    src.stop(now + dur + 0.02);
+  }
+
   function playLatchClick(freq){
     var ctx = ensureAudioCtx();
     if(!ctx) return;
@@ -759,6 +798,22 @@
     document.getElementById("coinLatch").disabled = false;
   }
 
+  // Only "operational" (and "hacked" -- the panel's off, but the machine
+  // still works) will actually dispense. "opened" and "lockdown" both
+  // refuse the coin, same as running out of stores.
+  function canVend(){
+    return machine.stores>0 && machine.status!=="lockdown" && machine.status!=="opened";
+  }
+
+  var FORCEABLE_STATES = ["operational","opened","hacked","lockdown"];
+  function setMachineStatus(status){
+    if(FORCEABLE_STATES.indexOf(status)===-1) return;
+    machine.status = status;
+    renderStatusIndicators();
+    renderPad();
+    renderCoinSlot();
+  }
+
   function renderStatusIndicators(){
     var pct = Math.max(0, Math.min(100, Math.round(machine.durability / 9 * 100)));
     document.getElementById("durabilityFill").style.height = pct + "%";
@@ -847,13 +902,15 @@
 
   function renderCoinSlot(){
     var btn = document.getElementById("coinSlot");
-    var locked = machine.status==="lockdown";
-    var empty = machine.stores<=0;
-    btn.disabled = locked || empty || coinState!=="idle";
+    btn.disabled = coinState!=="idle";
   }
 
   function insertCoin(){
-    if(coinState!=="idle" || machine.status==="lockdown" || machine.stores<=0) return;
+    if(coinState!=="idle") return;
+    if(!canVend()){
+      if(soundEnabled) playSoftCrunch();
+      return;
+    }
     coinState = "arming";
     renderCoinSlot();
     if(soundEnabled){ playCoinDrop(); playHum(); }
@@ -877,7 +934,12 @@
   // it hands the dispensed beverage back via callback so the 3D view can
   // show its own feedback.
   function insertCoinAndVend(onDone){
-    if(coinState!=="idle" || machine.status==="lockdown" || machine.stores<=0){
+    if(coinState!=="idle"){
+      if(onDone) onDone(null);
+      return;
+    }
+    if(!canVend()){
+      if(soundEnabled) playSoftCrunch();
       if(onDone) onDone(null);
       return;
     }
@@ -900,12 +962,10 @@
 
   function renderPad(){
     var pad = document.getElementById("selectionPad");
-    var locked = machine.status==="lockdown";
-    var empty = machine.stores<=0;
     var armed = coinState==="armed";
     pad.innerHTML = availableBeverages(machine.range).map(function(b){
       var badge = b.range==="all" ? "All" : b.range==="classic" ? "Classic" : b.range==="zimmka" ? "Zimmka!" : "Rare";
-      return '<button class="pad-btn" type="button" data-id="'+b.id+'" title="'+esc(b.flavor)+'"'+((locked||empty||!armed)?' disabled':'')+'>'+
+      return '<button class="pad-btn" type="button" data-id="'+b.id+'" title="'+esc(b.flavor)+'"'+((!canVend()||!armed)?' disabled':'')+'>'+
         '<span class="pad-btn__code">'+b.code+'</span>'+
         '<span class="pad-btn__name">'+esc(b.name)+'</span>'+
         '<span class="pad-btn__badge">'+badge+'</span>'+
@@ -1068,7 +1128,7 @@
   }
 
   function dispense(bev){
-    if(coinState!=="armed" || machine.status==="lockdown" || machine.stores<=0) return;
+    if(coinState!=="armed" || !canVend()) return;
     machine.stores -= 1;
     spawnCanPhysics(bev);
     document.getElementById("dispenseCaption").innerHTML = '<span class="n">'+esc(bev.name)+'</span> — '+esc(bev.effect);
@@ -1109,7 +1169,7 @@
 
   // Small handoff point for the separate 3D-view module script (view3d.js)
   // — it can't reach into this IIFE's closure directly.
-  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; } };
+  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: function(){ return machine.status; }, setStatus: setMachineStatus };
 
   // 3D is the default view, no on-page control for it. `?classic` in the
   // URL is a dev-only escape hatch back to the DOM/CSS machine (e.g. for
@@ -1162,6 +1222,7 @@
   var container = document.getElementById("view3d");
   var hint = document.getElementById("view3dHint");
   var scene, camera, renderer, controls, raycaster, pointer, model;
+  var statusLights = []; // { light, normalColor } for every light found in the model
   var ready = false;
   var downPt = null;
 
@@ -1256,6 +1317,12 @@
         model.rotation.y = Math.PI; // the model faces backwards on load — turn it around
         scene.add(model);
         frameModel(model);
+        model.traverse(function(o){
+          if(o.isLight){
+            o.intensity *= 0.25; // reduced 75% from whatever was authored in Blender
+            statusLights.push({ light: o, normalColor: o.color.clone() });
+          }
+        });
         setHint("Drag to orbit · scroll to zoom · click the coin slot to vend");
       },
       undefined,
@@ -1700,10 +1767,28 @@
     });
   }
 
+  function refreshAdminStateButtons(){
+    var current = window.ZCMachine && window.ZCMachine.getStatus();
+    document.querySelectorAll("#adminStates .admin-panel__btn").forEach(function(btn){
+      btn.classList.toggle("is-active", btn.dataset.status === current);
+    });
+  }
+
   function initAdmin(){
     document.getElementById("adminPanel").hidden = false;
     document.getElementById("adminConnect").addEventListener("click", connectFolder);
     tryRestoreFolder();
+
+    // Force-state buttons -- dev/testing only, same gate as the rest of
+    // the admin panel. Lets us test lockdown/opened behaviour (blocked
+    // vend, crunch sound, red status light) without rerolling durability.
+    document.getElementById("adminStates").addEventListener("click", function(e){
+      var btn = e.target.closest(".admin-panel__btn");
+      if(!btn || !window.ZCMachine) return;
+      window.ZCMachine.setStatus(btn.dataset.status);
+      refreshAdminStateButtons();
+    });
+    refreshAdminStateButtons();
 
     window.addEventListener("keydown", function(e){
       if(e.key === "Control" && e.location === 1 && !ctrlHeld){
@@ -1856,12 +1941,27 @@
     renderer.setSize(container.clientWidth, container.clientHeight);
   }
 
+  // Status light(s) on the model: normal colour, blinking on/off every
+  // 2s; in Lock Down they switch red and blink twice as fast (once/sec).
+  var STATUS_LIGHT_RED = 0xff2020;
+  function stepStatusLights(t){
+    if(!statusLights.length) return;
+    var lockdown = window.ZCMachine && window.ZCMachine.getStatus() === "lockdown";
+    var interval = lockdown ? 1000 : 2000;
+    var on = Math.floor(t / interval) % 2 === 0;
+    statusLights.forEach(function(s){
+      s.light.color.set(lockdown ? STATUS_LIGHT_RED : s.normalColor);
+      s.light.visible = on;
+    });
+  }
+
   var lastTickT = null;
   function tick(t){
     requestAnimationFrame(tick);
     var dt = lastTickT===null ? 0 : Math.min((t - lastTickT) / 1000, 0.05);
     lastTickT = t;
     if(cans3D.length) stepCans3D(dt);
+    stepStatusLights(t);
     controls.update();
     renderer.render(scene, camera);
   }
@@ -1871,7 +1971,7 @@
     resize: onResize,
     // exposes scene internals for hotspot calibration in the console —
     // e.g. window.ZC3D.debug().camera
-    debug: function(){ return { scene: scene, camera: camera, renderer: renderer, raycaster: raycaster, controls: controls, model: model, HOTSPOTS: HOTSPOTS, cans3D: cans3D, spawnCan3D: spawnCan3D, TRAY_SPAWN_CENTER: TRAY_SPAWN_CENTER, TRAY_FLOOR_PLANE: TRAY_FLOOR_PLANE, TRAY_WALLS: TRAY_WALLS, canRadius: canRadius }; }
+    debug: function(){ return { scene: scene, camera: camera, renderer: renderer, raycaster: raycaster, controls: controls, model: model, HOTSPOTS: HOTSPOTS, cans3D: cans3D, spawnCan3D: spawnCan3D, TRAY_SPAWN_CENTER: TRAY_SPAWN_CENTER, TRAY_FLOOR_PLANE: TRAY_FLOOR_PLANE, TRAY_WALLS: TRAY_WALLS, canRadius: canRadius, statusLights: statusLights }; }
   };
 
   // This module script always runs after the classic script (module
