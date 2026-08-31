@@ -735,8 +735,9 @@
   var drinksDispensed = [];
 
   // Latch: consecutive presses climb in pitch (with a little jitter). The
-  // 10th press jams the latch instead — a clunk, a random tool from the
-  // table above, and the latch stays dead until the next unit.
+  // LATCH_JAM_CLICKS-th press jams the latch instead — a clunk, a random
+  // tool from the table above, and the latch stays dead until the next unit.
+  var LATCH_JAM_CLICKS = 15;
   var latchClicks = 0;
   var latchLocked = false;
 
@@ -825,7 +826,7 @@
   function pressLatch(){
     if(latchLocked) return;
     latchClicks += 1;
-    if(latchClicks >= 10){
+    if(latchClicks >= LATCH_JAM_CLICKS){
       latchLocked = true;
       document.getElementById("coinLatch").disabled = true;
       if(soundEnabled) playClunk();
@@ -1108,7 +1109,7 @@
 
   // Small handoff point for the separate 3D-view module script (view3d.js)
   // — it can't reach into this IIFE's closure directly.
-  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend };
+  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch };
 
   // 3D is the default view, no on-page control for it. `?classic` in the
   // URL is a dev-only escape hatch back to the DOM/CSS machine (e.g. for
@@ -1762,6 +1763,18 @@
             setHint("Can't vend right now (locked or empty)");
           }
         });
+      }
+    },
+    {
+      // From hotspots/hotspot-8.json (admin capture) -- the small latch
+      // beside the coin slot. Same escalating-pitch click mini-game as
+      // the classic view's latch button; jamming it drops a random tool
+      // into the Recovered Tools panel.
+      name: "latch",
+      point: new THREE.Vector3(0.3932, 1.1632, 0.0345),
+      radius: 0.18,
+      action: function(){
+        if(window.ZCMachine) window.ZCMachine.pressLatch();
       }
     }
   ];
