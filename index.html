@@ -399,6 +399,24 @@
   }
   .side-list__drink-effect{ color:var(--white-dim); font-size:11px; }
 
+  .hacked-password-row{ background:none !important; border:none !important; padding:0 !important; }
+  .hacked-password-input{
+    width:100%; background:var(--black); color:#2ecc71;
+    border:1px solid #2ecc71; border-radius:6px;
+    font-family:'IBM Plex Mono', monospace; font-size:13px;
+    padding:8px 10px;
+  }
+  .hacked-password-input::placeholder{ color:var(--white-faint); }
+  .hacked-password-input:focus-visible{ outline:2px solid #2ecc71; outline-offset:2px; }
+  .hacked-tile{
+    all:unset; width:100%; box-sizing:border-box; cursor:pointer;
+    background:var(--black); border:1px solid #2ecc71; border-radius:6px;
+    padding:8px 10px; font-family:'IBM Plex Mono', monospace; font-size:12px; color:#2ecc71;
+    transition:transform .1s ease, filter .1s ease;
+  }
+  .hacked-tile:hover{ filter:brightness(1.2); }
+  .hacked-tile.is-pressed{ transform:scale(.96); filter:brightness(1.4); }
+
   /* ---------- 3D view (the default view — no on-page toggle) ---------- */
   #view3d{
     position:fixed; inset:0; z-index:8;
@@ -1182,9 +1200,44 @@
 
   // Nothing here yet -- placeholder for whatever a hacked terminal will
   // eventually let the player do.
+  // Hard-coded password -> unlocked tile table. Each entry fires once per
+  // session (not per machine unit) -- re-entering a spent password does
+  // nothing, same as a wrong one.
+  var HACKED_PASSWORDS = {
+    "hello": { tileLabel: "hello world!", used: false }
+  };
+  var hackedTiles = []; // { label } -- accumulates for the session
+
+  function submitHackedPassword(input){
+    var pw = input.value.trim().toLowerCase();
+    if(!pw) return;
+    var entry = HACKED_PASSWORDS[pw];
+    if(!entry || entry.used) return; // wrong, or already spent -- leave their input as typed
+    entry.used = true;
+    hackedTiles.push({ label: entry.tileLabel });
+    renderHackedList();
+  }
+
   function renderHackedList(){
+    var tilesHtml = hackedTiles.length
+      ? hackedTiles.map(function(t, i){
+          return '<li><button type="button" class="hacked-tile" data-tile-i="'+i+'">'+esc(t.label)+'</button></li>';
+        }).join("")
+      : '<li class="side-list__empty" style="background:none;border:none;padding:0;">No actions available yet.</li>';
+
     document.getElementById("sideList").innerHTML =
-      '<li class="side-list__empty" style="background:none;border:none;padding:0;">No actions available yet.</li>';
+      '<li class="hacked-password-row"><input type="text" class="hacked-password-input" id="hackedPasswordInput" placeholder="password…" autocomplete="off" aria-label="Password"></li>' +
+      tilesHtml;
+
+    document.getElementById("hackedPasswordInput").addEventListener("keydown", function(e){
+      if(e.key === "Enter") submitHackedPassword(this);
+    });
+    document.querySelectorAll(".hacked-tile").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        btn.classList.add("is-pressed");
+        window.setTimeout(function(){ btn.classList.remove("is-pressed"); }, 150);
+      });
+    });
   }
 
   var SIDE_PANEL_TITLES = { tools: "Recovered Tools", drinks: "Dispensed Drinks", hacked: "Hacked Terminal Actions" };
