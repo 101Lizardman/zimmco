@@ -1218,6 +1218,10 @@
       if(ADMIN_MODE && ctrlHeld){ onAdminCaptureClick(e); return; }
       onClick(e);
     });
+    renderer.domElement.addEventListener("pointermove", onHover);
+    renderer.domElement.addEventListener("pointerleave", function(){
+      renderer.domElement.style.cursor = "";
+    });
 
     window.addEventListener("resize", onResize);
     requestAnimationFrame(tick);
@@ -1521,6 +1525,20 @@
     return null;
   }
 
+  // Swap in the standard "this is clickable" pointer cursor whenever the
+  // mouse is over a hotspot, so hovering the coin slot (etc.) looks the
+  // way a real interactive control should.
+  function onHover(e){
+    if(!model) return;
+    var rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    var hits = raycaster.intersectObject(model, true);
+    var spot = hits.length ? nearestHotspot(hits[0].point) : null;
+    renderer.domElement.style.cursor = spot ? "pointer" : "";
+  }
+
   function onClick(e){
     var rect = renderer.domElement.getBoundingClientRect();
     pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -1537,9 +1555,10 @@
         spot.action();
         return;
       }
-      setHint('Clicked "' + (hit.object.name || "(unnamed mesh)") + '" — no hotspot there yet');
+      console.log('[view3d] clicked "' + (hit.object.name || "(unnamed mesh)") + '" — no hotspot there');
+      setHint("Click coin slot to vend");
     } else {
-      setHint("No part hit — try again");
+      setHint("Click coin slot to vend");
     }
   }
 
