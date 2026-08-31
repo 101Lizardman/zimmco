@@ -1109,7 +1109,7 @@
 
   // Small handoff point for the separate 3D-view module script (view3d.js)
   // — it can't reach into this IIFE's closure directly.
-  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch };
+  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; } };
 
   // 3D is the default view, no on-page control for it. `?classic` in the
   // URL is a dev-only escape hatch back to the DOM/CSS machine (e.g. for
@@ -1773,6 +1773,9 @@
       name: "latch",
       point: new THREE.Vector3(0.3932, 1.1632, 0.0345),
       radius: 0.18,
+      // Goes inactive once it's jammed and dropped its tool -- no more
+      // pointer cursor, no more clicks, until the next unit resets it.
+      active: function(){ return !(window.ZCMachine && window.ZCMachine.isLatchLocked()); },
       action: function(){
         if(window.ZCMachine) window.ZCMachine.pressLatch();
       }
@@ -1802,7 +1805,9 @@
 
   function nearestHotspot(point){
     for(var i = 0; i < HOTSPOTS.length; i++){
-      if(point.distanceTo(HOTSPOTS[i].point) <= HOTSPOTS[i].radius) return HOTSPOTS[i];
+      var h = HOTSPOTS[i];
+      if(h.active && !h.active()) continue; // inactive -- no cursor, no click
+      if(point.distanceTo(h.point) <= h.radius) return h;
     }
     return null;
   }
