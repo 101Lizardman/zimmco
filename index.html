@@ -432,7 +432,9 @@
   .sound-fab:hover{ filter:brightness(1.08); }
   .sound-fab:active{ transform:translateY(1px); }
   .sound-fab:focus-visible{ outline:2px solid var(--white); outline-offset:3px; }
-  .sound-fab svg{ display:block; pointer-events:none; }
+  .sound-fab svg{ pointer-events:none; }
+  .sound-fab svg:not([hidden]){ display:block; }
+  .sound-fab svg[hidden]{ display:none; }
 
   /* ---------- dispense toasts (top-centre, over the 3D display) ---------- */
   .dispense-toasts{
@@ -776,10 +778,16 @@
     b.classList.toggle("btn--fill", soundEnabled);
   }
 
+  function setSvgHidden(el, isHidden){
+    // el.hidden doesn't reliably reflect to the `hidden` attribute on SVG
+    // elements in every engine, so set the attribute directly instead.
+    if(isHidden) el.setAttribute("hidden", ""); else el.removeAttribute("hidden");
+  }
+
   function renderSoundFab(){
     var fab = document.getElementById("soundFab");
-    document.getElementById("soundFabIconOn").hidden = !soundEnabled;
-    document.getElementById("soundFabIconOff").hidden = soundEnabled;
+    setSvgHidden(document.getElementById("soundFabIconOn"), !soundEnabled);
+    setSvgHidden(document.getElementById("soundFabIconOff"), soundEnabled);
     fab.setAttribute("aria-pressed", String(soundEnabled));
     var label = soundEnabled ? "Mute sound effects" : "Unmute sound effects";
     fab.setAttribute("aria-label", label);
