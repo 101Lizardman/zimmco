@@ -1172,7 +1172,7 @@
 
   function setHint(text){ hint.textContent = text; }
 
-  // Top-centre toast for whatever was just dispensed. Stays up 15s or
+  // Top-centre toast for whatever was just dispensed. Stays up 5s or
   // until closed by hand; stacks if you vend again before it clears.
   function showDispenseToast(bev){
     var container = document.getElementById("dispenseToasts");
@@ -1202,7 +1202,7 @@
 
     requestAnimationFrame(function(){ el.classList.add("is-visible"); });
 
-    var autoTimer = setTimeout(dismiss, 15000);
+    var autoTimer = setTimeout(dismiss, 5000);
     function dismiss(){
       clearTimeout(autoTimer);
       el.classList.remove("is-visible");
