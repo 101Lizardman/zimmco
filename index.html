@@ -428,6 +428,12 @@
     font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--white-dim);
     line-height:1.4;
   }
+  .internals-stats{
+    background:none !important; border:none !important; padding:0 0 6px 0 !important;
+    display:flex; flex-direction:column; gap:3px;
+    font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--white-dim);
+  }
+  .internals-stats .n{ color:#2ecc71; font-weight:600; }
 
   /* ---------- 3D view (the default view — no on-page toggle) ---------- */
   #view3d{
@@ -1451,6 +1457,18 @@
     document.getElementById("durabilityFill").style.height = pct + "%";
     var light = document.getElementById("statusLight");
     light.classList.toggle("is-lockdown", machine.lockdown);
+    updateInternalsStats();
+  }
+
+  // Patches the Durability/Remaining stores readout at the top of the
+  // Internals panel in place, if it's currently open -- called from
+  // every path that changes durability (via renderStatusIndicators) or
+  // stores, so the numbers never go stale while the panel is up.
+  function updateInternalsStats(){
+    var d = document.getElementById("internalsStatDurability");
+    var s = document.getElementById("internalsStatStores");
+    if(d) d.textContent = machine.durability;
+    if(s) s.textContent = machine.stores;
   }
 
   // Tab badge counts, and the Tools tab only ever appears once there's
@@ -1626,6 +1644,7 @@
     machine.stores = 0;
     renderPad();
     renderCoinSlot();
+    updateInternalsStats();
     drinksDispensed.push({ name: "Extracted Stores", effect: breakdown });
     updateSideTabCounts();
     if(sidePanelMode === "drinks") renderDrinksList();
@@ -1694,7 +1713,14 @@
       return hackedTileHtml(t.title, t.body, 'data-internals-key="'+t.key+'"', machine.sheltered || t.disabled);
     }).join("");
 
+    var statsHtml =
+      '<li class="internals-stats">' +
+        '<span>Durability: <span class="n" id="internalsStatDurability">'+machine.durability+'</span></span>' +
+        '<span>Remaining stores: <span class="n" id="internalsStatStores">'+machine.stores+'</span></span>' +
+      '</li>';
+
     document.getElementById("sideList").innerHTML =
+      statsHtml +
       '<li class="hacked-password-row"><input type="text" class="hacked-password-input" id="internalsPasswordInput" placeholder="password…" autocomplete="off" aria-label="Password"></li>' +
       extractTileHtml +
       tilesHtml;
@@ -1805,6 +1831,7 @@
       coinState = "idle";
       renderCoinSlot();
       renderPad();
+      updateInternalsStats();
       addDispensedDrink(bev);
       if(soundEnabled){ playCanDrop(); playVoiceLine(bev.id); }
       if(onDone) onDone(bev);
@@ -1986,6 +2013,7 @@
     coinState = "idle";
     renderPad();
     renderCoinSlot();
+    updateInternalsStats();
     addDispensedDrink(bev);
     if(soundEnabled){ playCanDrop(); playVoiceLine(bev.id); }
   }
