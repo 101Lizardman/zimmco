@@ -316,39 +316,47 @@
   footer a{ color:var(--secondary); }
   footer .credits{ display:block; margin-top:6px; }
 
-  /* ---------- tools drawer (slide-out side panel) ---------- */
-  .tools-tab{
-    all:unset;
+  /* ---------- side tabs: drinks + tools (shared slide-out panel) ---------- */
+  .tabs-rail{
     position:fixed; top:50%; right:0; transform:translateY(-50%);
+    z-index:20;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .side-tab{
+    all:unset;
     writing-mode:vertical-rl; text-orientation:mixed;
     display:flex; align-items:center; gap:6px;
-    background:var(--secondary); color:var(--black);
+    color:var(--black);
     font-family:'Oswald', sans-serif; font-weight:600; font-size:11px; letter-spacing:.1em; text-transform:uppercase;
     padding:14px 6px;
     border-radius:8px 0 0 8px;
     cursor:pointer;
     box-shadow:-2px 0 12px rgba(0,0,0,.45);
-    z-index:20;
     transition: filter .12s ease;
   }
-  .tools-tab:hover{ filter:brightness(1.1); }
-  .tools-tab:focus-visible{ outline:2px solid var(--white); outline-offset:2px; }
-  .tools-tab__count{
+  .side-tab:hover{ filter:brightness(1.1); }
+  .side-tab:focus-visible{ outline:2px solid var(--white); outline-offset:2px; }
+  .side-tab[hidden]{ display:none; }
+  .side-tab--tools{ background:var(--secondary); }
+  .side-tab--drinks{ background:var(--primary-light); }
+  .side-tab__count{
     writing-mode:horizontal-tb;
-    background:var(--black); color:var(--secondary);
+    background:var(--black);
     border-radius:100px; font-size:10px; padding:1px 6px;
     font-family:'IBM Plex Mono', monospace;
   }
+  .side-tab--tools .side-tab__count{ color:var(--secondary); }
+  .side-tab--drinks .side-tab__count{ color:var(--primary-light); }
 
-  .tools-backdrop{
+  .side-backdrop{
     position:fixed; inset:0; background:rgba(0,0,0,.5);
     z-index:19; opacity:0; pointer-events:none;
     transition:opacity .2s ease;
   }
-  .tools-backdrop.is-open{ opacity:1; pointer-events:auto; }
-  @media (prefers-reduced-motion: reduce){ .tools-backdrop{ transition:none; } }
+  .side-backdrop.is-open{ opacity:1; pointer-events:auto; }
+  @media (prefers-reduced-motion: reduce){ .side-backdrop{ transition:none; } }
 
-  .tools-panel{
+  .side-panel{
     position:fixed; top:0; right:0; bottom:0; width:min(280px, 84vw);
     background: linear-gradient(180deg, var(--primary-light), var(--primary-shade));
     border-left:3px solid var(--secondary);
@@ -359,28 +367,34 @@
     display:flex; flex-direction:column;
     padding:16px;
   }
-  .tools-panel.is-open{ transform:translateX(0); }
-  @media (prefers-reduced-motion: reduce){ .tools-panel{ transition:none; } }
+  .side-panel.is-open{ transform:translateX(0); }
+  @media (prefers-reduced-motion: reduce){ .side-panel{ transition:none; } }
 
-  .tools-panel__head{
+  .side-panel__head{
     display:flex; justify-content:space-between; align-items:center;
     font-family:'Oswald', sans-serif; font-weight:600; text-transform:uppercase; letter-spacing:.08em; font-size:13px;
     color:var(--white);
     border-bottom:2px solid var(--secondary);
     padding-bottom:10px; margin-bottom:12px;
   }
-  .tools-close{ all:unset; cursor:pointer; color:var(--white-dim); font-size:20px; line-height:1; padding:2px 7px; border-radius:4px; }
-  .tools-close:hover{ color:var(--white); }
-  .tools-close:focus-visible{ outline:2px solid var(--secondary); outline-offset:2px; }
+  .side-close{ all:unset; cursor:pointer; color:var(--white-dim); font-size:20px; line-height:1; padding:2px 7px; border-radius:4px; }
+  .side-close:hover{ color:var(--white); }
+  .side-close:focus-visible{ outline:2px solid var(--secondary); outline-offset:2px; }
 
-  .tools-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; overflow-y:auto; }
-  .tools-list__empty{ color:var(--white-faint); font-family:'IBM Plex Mono', monospace; font-size:12px; }
-  .tools-list li{
+  .side-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; overflow-y:auto; }
+  .side-list__empty{ color:var(--white-faint); font-family:'IBM Plex Mono', monospace; font-size:12px; }
+  .side-list li{
     background: var(--black); border:1px solid var(--secondary-soft); border-radius:6px;
     padding:8px 10px; font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--secondary);
     display:flex; justify-content:space-between; gap:8px;
   }
-  .tools-list li .n{ color:var(--white-faint); flex:none; }
+  .side-list li .n{ color:var(--white-faint); flex:none; }
+  .side-list__drink{ flex-direction:column; align-items:flex-start; gap:2px; }
+  .side-list__drink-name{
+    color:var(--secondary); font-family:'Oswald', sans-serif; font-weight:600; font-size:12px;
+    text-transform:uppercase; letter-spacing:.02em;
+  }
+  .side-list__drink-effect{ color:var(--white-dim); font-size:11px; }
 
   /* ---------- 3D view (the default view — no on-page toggle) ---------- */
   #view3d{
@@ -557,16 +571,21 @@
   <span class="credits">Vending machine model by <a href="https://sketchfab.com/3d-models/kiosk-machine-retro-horror-vending-automat-300c0c705eea4c0f9d510021c847646f" target="_blank" rel="noopener">ZwiebelGames</a> · SFX by <a href="https://pixabay.com/sound-effects/film-special-effects-vending-machine-action-61196/" target="_blank" rel="noopener">Kyodon</a></span>
 </footer>
 
-<button type="button" class="tools-tab" id="toolsTab" aria-expanded="false" aria-controls="toolsPanel">
-  Tools <span class="tools-tab__count" id="toolsCount">0</span>
-</button>
-<div class="tools-backdrop" id="toolsBackdrop" hidden></div>
-<aside class="tools-panel" id="toolsPanel" aria-hidden="true" aria-label="Recovered tools">
-  <div class="tools-panel__head">
-    <span>Recovered Tools</span>
-    <button type="button" class="tools-close" id="toolsClose" aria-label="Close tools panel">×</button>
+<div class="tabs-rail">
+  <button type="button" class="side-tab side-tab--drinks" id="drinksTab" aria-expanded="false" aria-controls="sidePanel">
+    Drinks <span class="side-tab__count" id="drinksCount">0</span>
+  </button>
+  <button type="button" class="side-tab side-tab--tools" id="toolsTab" aria-expanded="false" aria-controls="sidePanel" hidden>
+    Tools <span class="side-tab__count" id="toolsCount">0</span>
+  </button>
+</div>
+<div class="side-backdrop" id="sideBackdrop" hidden></div>
+<aside class="side-panel" id="sidePanel" aria-hidden="true" aria-label="Session log">
+  <div class="side-panel__head">
+    <span id="sidePanelTitle">Dispensed Drinks</span>
+    <button type="button" class="side-close" id="sideClose" aria-label="Close panel">×</button>
   </div>
-  <ul class="tools-list" id="toolsList"></ul>
+  <ul class="side-list" id="sideList"></ul>
 </aside>
 
 <script>
@@ -713,6 +732,7 @@
   // toolkit, 5-6 Crowbar, 7-8 Electronic tool set, 9 Lockpick set.
   var TOOLS_TABLE = ["Nothing","Nothing","Mechanical toolkit","Mechanical toolkit","Mechanical toolkit","Crowbar","Crowbar","Electronic tool set","Electronic tool set","Lockpick set"];
   var toolsCollected = [];
+  var drinksDispensed = [];
 
   // Latch: consecutive presses climb in pitch (with a little jitter). The
   // 10th press jams the latch instead — a clunk, a random tool from the
@@ -745,11 +765,30 @@
     light.classList.toggle("is-lockdown", machine.status==="lockdown");
   }
 
-  function renderToolsPanel(){
+  // Tab badge counts, and the Tools tab only ever appears once there's
+  // something in it — the latch is meant to be a hidden find, not
+  // advertised before you've stumbled onto it.
+  function updateSideTabCounts(){
+    document.getElementById("drinksCount").textContent = String(drinksDispensed.length);
     document.getElementById("toolsCount").textContent = String(toolsCollected.length);
-    var list = document.getElementById("toolsList");
+    document.getElementById("toolsTab").hidden = toolsCollected.length === 0;
+  }
+
+  function renderDrinksList(){
+    var list = document.getElementById("sideList");
+    if(drinksDispensed.length === 0){
+      list.innerHTML = '<li class="side-list__empty" style="background:none;border:none;padding:0;">No drinks dispensed yet.</li>';
+      return;
+    }
+    list.innerHTML = drinksDispensed.map(function(bev){
+      return '<li class="side-list__drink"><span class="side-list__drink-name">'+esc(bev.name)+'</span><span class="side-list__drink-effect">'+esc(bev.effect)+'</span></li>';
+    }).join("");
+  }
+
+  function renderToolsList(){
+    var list = document.getElementById("sideList");
     if(toolsCollected.length===0){
-      list.innerHTML = '<li class="tools-list__empty" style="background:none;border:none;padding:0;">No tools recovered yet.</li>';
+      list.innerHTML = '<li class="side-list__empty" style="background:none;border:none;padding:0;">No tools recovered yet.</li>';
       return;
     }
     list.innerHTML = toolsCollected.map(function(tool, i){
@@ -757,13 +796,30 @@
     }).join("");
   }
 
-  function setToolsPanel(open){
-    document.getElementById("toolsPanel").classList.toggle("is-open", open);
-    document.getElementById("toolsPanel").setAttribute("aria-hidden", String(!open));
-    document.getElementById("toolsTab").setAttribute("aria-expanded", String(open));
-    var backdrop = document.getElementById("toolsBackdrop");
+  // One shared slide-out panel for both tabs; opening either one renders
+  // its content into it and switches the panel to that mode.
+  var sidePanelMode = null;
+  function openSidePanel(which){
+    sidePanelMode = which;
+    document.getElementById("sidePanelTitle").textContent = which === "tools" ? "Recovered Tools" : "Dispensed Drinks";
+    if(which === "tools") renderToolsList(); else renderDrinksList();
+    setSidePanelOpen(true);
+  }
+  function setSidePanelOpen(open){
+    document.getElementById("sidePanel").classList.toggle("is-open", open);
+    document.getElementById("sidePanel").setAttribute("aria-hidden", String(!open));
+    document.getElementById("drinksTab").setAttribute("aria-expanded", String(open && sidePanelMode==="drinks"));
+    document.getElementById("toolsTab").setAttribute("aria-expanded", String(open && sidePanelMode==="tools"));
+    var backdrop = document.getElementById("sideBackdrop");
     backdrop.classList.toggle("is-open", open);
     backdrop.hidden = !open;
+    if(!open) sidePanelMode = null;
+  }
+
+  function addDispensedDrink(bev){
+    drinksDispensed.push(bev);
+    updateSideTabCounts();
+    if(sidePanelMode === "drinks") renderDrinksList();
   }
 
   function pressLatch(){
@@ -775,8 +831,8 @@
       if(soundEnabled) playClunk();
       var tool = TOOLS_TABLE[d10()];
       toolsCollected.push(tool);
-      renderToolsPanel();
-      setToolsPanel(true);
+      updateSideTabCounts();
+      openSidePanel("tools");
       return;
     }
     var freq = 650 + (latchClicks - 1) * 75 + (Math.random() * 50 - 25);
@@ -835,6 +891,7 @@
       coinState = "idle";
       renderCoinSlot();
       renderPad();
+      addDispensedDrink(bev);
       if(soundEnabled){ playCanDrop(); playVoiceLine(bev.id); }
       if(onDone) onDone(bev);
     }, 1500);
@@ -1017,6 +1074,7 @@
     coinState = "idle";
     renderPad();
     renderCoinSlot();
+    addDispensedDrink(bev);
     if(soundEnabled){ playCanDrop(); playVoiceLine(bev.id); }
   }
 
@@ -1028,11 +1086,10 @@
   });
   document.getElementById("coinSlot").addEventListener("click", insertCoin);
   document.getElementById("coinLatch").addEventListener("click", pressLatch);
-  document.getElementById("toolsTab").addEventListener("click", function(){
-    setToolsPanel(!document.getElementById("toolsPanel").classList.contains("is-open"));
-  });
-  document.getElementById("toolsClose").addEventListener("click", function(){ setToolsPanel(false); });
-  document.getElementById("toolsBackdrop").addEventListener("click", function(){ setToolsPanel(false); });
+  document.getElementById("drinksTab").addEventListener("click", function(){ openSidePanel("drinks"); });
+  document.getElementById("toolsTab").addEventListener("click", function(){ openSidePanel("tools"); });
+  document.getElementById("sideClose").addEventListener("click", function(){ setSidePanelOpen(false); });
+  document.getElementById("sideBackdrop").addEventListener("click", function(){ setSidePanelOpen(false); });
   document.getElementById("btnNewUnit").addEventListener("click", function(){
     newMachine();
     coinState = "idle";
@@ -1076,7 +1133,7 @@
   renderStatusIndicators();
   renderPad();
   renderCoinSlot();
-  renderToolsPanel();
+  updateSideTabCounts();
   syncOpeningBackdrop();
 })();
 </script>
