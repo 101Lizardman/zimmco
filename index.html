@@ -627,6 +627,18 @@
   </div>
 </div>
 
+<div class="hack-backdrop" id="crackBackdrop" hidden>
+  <div class="hack-modal" role="dialog" aria-modal="true" aria-labelledby="crackModalHeading">
+    <p class="hack-modal__heading" id="crackModalHeading">Crack It Open</p>
+    <p class="hack-modal__instruction">How much damage did you do?</p>
+    <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="hack-modal__input" id="crackInput" autocomplete="off" aria-label="Damage dealt">
+    <div class="hack-modal__actions">
+      <button type="button" class="btn btn--fill" id="crackSubmit">Confirm</button>
+      <button type="button" class="btn" id="crackCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div class="admin-panel" id="adminPanel" hidden>
   <div class="admin-panel__title">Admin — Hotspot Capture</div>
   <button type="button" class="admin-panel__btn" id="adminConnect">Connect Hotspot Folder</button>
@@ -879,6 +891,7 @@
   // sawtooth/square pair through a bandpass, with the frequency and gain
   // both jittered in fast random steps for a crackling, arcing quality.
   function playHackBuzz(){
+    if(!soundEnabled) return;
     var ctx = ensureAudioCtx();
     if(!ctx) return;
     var now = ctx.currentTime;
@@ -919,6 +932,7 @@
   // Tiny spark of the same electric-buzz family for each individual
   // click/tamper on the mainframe hotspot, before it actually gives way.
   function playZzt(){
+    if(!soundEnabled) return;
     var ctx = ensureAudioCtx();
     if(!ctx) return;
     var now = ctx.currentTime;
@@ -986,6 +1000,48 @@
     rattle.connect(rgain).connect(ctx.destination);
     rattle.start(now);
     rattle.stop(now + 0.12);
+  }
+
+  // Heavy impact for striking the side panels (crack-it-open hotspots):
+  // a deep falling sine for the body, plus a short burst of lowpassed
+  // noise for the transient "thock" of the hit.
+  function playThunk(){
+    if(!soundEnabled) return;
+    var ctx = ensureAudioCtx();
+    if(!ctx) return;
+    var now = ctx.currentTime;
+
+    var osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(150, now);
+    osc.frequency.exponentialRampToValueAtTime(45, now + 0.15);
+    var gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.6, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.3);
+
+    var dur = 0.05;
+    var bufSize = Math.max(1, Math.round(ctx.sampleRate * dur));
+    var buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+    var data = buffer.getChannelData(0);
+    for(var i = 0; i < bufSize; i++){
+      var decay = 1 - (i / bufSize);
+      data[i] = (Math.random() * 2 - 1) * decay;
+    }
+    var src = ctx.createBufferSource();
+    src.buffer = buffer;
+    var filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(500, now);
+    var nGain = ctx.createGain();
+    nGain.gain.setValueAtTime(0.5, now);
+    nGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    src.connect(filter).connect(nGain).connect(ctx.destination);
+    src.start(now);
+    src.stop(now + dur + 0.01);
   }
 
   var VOICE_BASE = "audio/voices/";
@@ -1144,22 +1200,24 @@
     "critical-failure": { title: "🚨 CRITICAL FAILURE 🚨", cls: "dispense-toast--failure" }
   };
 
-  function showHackResultToast(outcome, roll, stat){
-    var meta = HACK_OUTCOME_META[outcome];
+  // Shared top-centre toast builder -- cls is any extra class(es) for
+  // colour (e.g. the hack outcomes' success/failure tint), or "" for the
+  // default neutral look.
+  function showResultToast(cls, title, detail){
     var container = document.getElementById("dispenseToasts");
     var el = document.createElement("div");
-    el.className = "dispense-toast " + meta.cls;
+    el.className = "dispense-toast" + (cls ? " " + cls : "");
 
     var body = document.createElement("div");
     body.className = "dispense-toast__body";
-    var title = document.createElement("div");
-    title.className = "dispense-toast__title";
-    title.textContent = meta.title;
-    var detail = document.createElement("div");
-    detail.className = "dispense-toast__effect";
-    detail.textContent = "Rolled " + roll + " vs stat " + stat + ".";
-    body.appendChild(title);
-    body.appendChild(detail);
+    var titleEl = document.createElement("div");
+    titleEl.className = "dispense-toast__title";
+    titleEl.textContent = title;
+    var detailEl = document.createElement("div");
+    detailEl.className = "dispense-toast__effect";
+    detailEl.textContent = detail;
+    body.appendChild(titleEl);
+    body.appendChild(detailEl);
 
     var closeBtn = document.createElement("button");
     closeBtn.type = "button";
@@ -1180,6 +1238,11 @@
       window.setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 300);
     }
     closeBtn.addEventListener("click", dismiss);
+  }
+
+  function showHackResultToast(outcome, roll, stat){
+    var meta = HACK_OUTCOME_META[outcome];
+    showResultToast(meta.cls, meta.title, "Rolled " + roll + " vs stat " + stat + ".");
   }
 
   function openHackModal(){
@@ -1223,6 +1286,57 @@
     }
 
     showHackResultToast(outcome, roll, stat);
+  }
+
+  /* -----------------------------------------------------------------
+   * Cracking the machine open with force (hotspots #10/#11): a single
+   * "how much damage did you do?" number, no roll involved.
+   *   damage <= 8               -> no effect, ignored entirely
+   *   damage > 8                -> subtract (damage - 8) from durability
+   *   durability hits 0 this way -> machine becomes Opened
+   *   damage beyond what durability could absorb ("excess") destroys
+   *   that many x50 cans of stock
+   * --------------------------------------------------------------- */
+  function openCrackModal(){
+    var input = document.getElementById("crackInput");
+    document.getElementById("crackBackdrop").hidden = false;
+    input.value = "";
+    window.setTimeout(function(){ input.focus(); }, 50);
+  }
+  function closeCrackModal(){
+    document.getElementById("crackBackdrop").hidden = true;
+  }
+
+  function submitCrackDamage(){
+    var input = document.getElementById("crackInput");
+    var raw = input.value.trim();
+    var dmg = parseInt(raw, 10);
+    if(raw === "" || !Number.isFinite(dmg) || dmg < 0 || dmg > 99){
+      input.focus();
+      return; // invalid entry -- leave the modal open rather than apply garbage
+    }
+    closeCrackModal();
+
+    if(dmg <= 8){
+      showResultToast("", "No Effect", "8 or less doesn't scratch a ZimmCo unit.");
+      return;
+    }
+
+    var effectiveDamage = dmg - 8; // only the amount over 8 actually counts
+    var excess = Math.max(0, effectiveDamage - machine.durability);
+    machine.durability = Math.max(0, machine.durability - effectiveDamage);
+
+    if(machine.durability === 0){
+      var stockLost = excess * 50;
+      if(stockLost > 0) machine.stores = Math.max(0, machine.stores - stockLost);
+      setMachineStatus("opened"); // re-renders the durability fill, pad, coin slot, tabs
+      showResultToast("", "Cracked Open!", stockLost > 0
+        ? "Durability destroyed. " + stockLost + " cans of stock lost in the process."
+        : "Durability destroyed.");
+    } else {
+      renderStatusIndicators();
+      showResultToast("", "Damaged", "Durability reduced by " + effectiveDamage + ".");
+    }
   }
 
   function renderStatusIndicators(){
@@ -1675,11 +1789,21 @@
     else if(e.key === "Escape") closeHackModal();
   });
 
+  document.getElementById("crackSubmit").addEventListener("click", submitCrackDamage);
+  document.getElementById("crackCancel").addEventListener("click", closeCrackModal);
+  document.getElementById("crackInput").addEventListener("input", function(){
+    this.value = this.value.replace(/[^0-9]/g, "").slice(0, 2);
+  });
+  document.getElementById("crackInput").addEventListener("keydown", function(e){
+    if(e.key === "Enter") submitCrackDamage();
+    else if(e.key === "Escape") closeCrackModal();
+  });
+
   window.addEventListener("resize", syncOpeningBackdrop);
 
   // Small handoff point for the separate 3D-view module script (view3d.js)
   // — it can't reach into this IIFE's closure directly.
-  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: machineStatusLabel, isLockdown: function(){ return machine.lockdown; }, isHacked: function(){ return machine.hacked; }, isOpened: function(){ return machine.opened; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal };
+  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: machineStatusLabel, isLockdown: function(){ return machine.lockdown; }, isHacked: function(){ return machine.hacked; }, isOpened: function(){ return machine.opened; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal, openCrackModal: openCrackModal, playThunk: playThunk };
 
   // 3D is the default view, no on-page control for it. `?classic` in the
   // URL is a dev-only escape hatch back to the DOM/CSS machine (e.g. for
@@ -2472,6 +2596,32 @@
         if(window.ZCMachine){
           window.ZCMachine.playHackBuzz();
           window.ZCMachine.openHackModal();
+        }
+      }
+    },
+    {
+      // From hotspots/hotspot-10.json (admin capture) -- the left side
+      // panel, a wide crowbar-prying target.
+      name: "crackOpenLeft",
+      point: new THREE.Vector3(-0.87900, 0.08032, -0.46648),
+      radius: 0.45,
+      action: function(){
+        if(window.ZCMachine){
+          window.ZCMachine.playThunk();
+          window.ZCMachine.openCrackModal();
+        }
+      }
+    },
+    {
+      // From hotspots/hotspot-11.json (admin capture) -- the right side
+      // panel, same "crack it open with force" action as #10.
+      name: "crackOpenRight",
+      point: new THREE.Vector3(0.67327, 0.20904, -0.39255),
+      radius: 0.45,
+      action: function(){
+        if(window.ZCMachine){
+          window.ZCMachine.playThunk();
+          window.ZCMachine.openCrackModal();
         }
       }
     }
