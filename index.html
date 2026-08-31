@@ -1401,6 +1401,26 @@
   }
 
   /* -----------------------------------------------------------------
+   * Lockdown's live-wire hazard: while the machine is in Lock Down,
+   * every action on it -- any hotspot click, any tile in the Hacked or
+   * Internals panels -- has to clear a ZAP! BODY save first, before the
+   * action itself is allowed to happen. Cancelling the save also
+   * cancels the action (you back off rather than going through with
+   * it); resolving it (either outcome) lets the action proceed.
+   * --------------------------------------------------------------- */
+  function zapGate(action){
+    if(!machine.lockdown){ action(); return; }
+    openStatCheckModal("ZAP!", "Enter BODY stat", false, function(result){
+      if(result.success){
+        showResultToast("dispense-toast--success", "ZAP!", "You're safe.");
+      } else {
+        showResultToast("dispense-toast--failure", "ZAP!", "Take 1 stress and lose 1 health.");
+      }
+      action();
+    });
+  }
+
+  /* -----------------------------------------------------------------
    * Cracking the machine open with force (hotspots #10/#11): a single
    * "how much damage did you do?" number, no roll involved.
    *   damage <= 8               -> no effect, ignored entirely
@@ -1566,8 +1586,10 @@
       });
     });
     document.getElementById("hackedCrackOpenTile").addEventListener("click", function(){
-      if(window.ZCMachine) window.ZCMachine.setStatus("opened");
-      playSteamHiss();
+      zapGate(function(){
+        if(window.ZCMachine) window.ZCMachine.setStatus("opened");
+        playSteamHiss();
+      });
     });
   }
 
@@ -1700,9 +1722,11 @@
 
   function internalsTileClickHandler(tile){
     if(machine.sheltered || tile.disabled) return;
-    if(tile.key === "transceiver") useTransceiverTile(tile);
-    else if(tile.key === "jumpstart") useJumpStartTile(tile);
-    else if(tile.key === "shelter") useShelterTile(tile);
+    zapGate(function(){
+      if(tile.key === "transceiver") useTransceiverTile(tile);
+      else if(tile.key === "jumpstart") useJumpStartTile(tile);
+      else if(tile.key === "shelter") useShelterTile(tile);
+    });
   }
 
   function renderInternalsList(){
@@ -1735,7 +1759,7 @@
       });
     });
     var extractBtn = document.getElementById("internalsExtractTile");
-    if(extractBtn) extractBtn.addEventListener("click", attemptExtractStores);
+    if(extractBtn) extractBtn.addEventListener("click", function(){ zapGate(attemptExtractStores); });
     document.querySelectorAll("#sideList .hacked-tile[data-internals-key]").forEach(function(btn){
       btn.addEventListener("click", function(){
         var tile = internalsTiles.filter(function(t){ return t.key === btn.dataset.internalsKey; })[0];
@@ -2085,7 +2109,7 @@
 
   // Small handoff point for the separate 3D-view module script (view3d.js)
   // — it can't reach into this IIFE's closure directly.
-  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: machineStatusLabel, isLockdown: function(){ return machine.lockdown; }, isHacked: function(){ return machine.hacked; }, isOpened: function(){ return machine.opened; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal, openCrackModal: openCrackModal, playThunk: playThunk };
+  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: machineStatusLabel, isLockdown: function(){ return machine.lockdown; }, isHacked: function(){ return machine.hacked; }, isOpened: function(){ return machine.opened; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal, openCrackModal: openCrackModal, playThunk: playThunk, zapGate: zapGate };
 
   // 3D is the default view, no on-page control for it. `?classic` in the
   // URL is a dev-only escape hatch back to the DOM/CSS machine (e.g. for
@@ -2831,16 +2855,18 @@
       point: new THREE.Vector3(0.40477, 0.63296, 0.07135),
       radius: 0.18,
       action: function(){
-        setHint("Insert coin…");
         if(!window.ZCMachine){ setHint("Machine logic not ready"); return; }
-        window.ZCMachine.insertCoinAndVend(function(bev){
-          if(bev){
-            setHint("Drag to orbit · scroll to zoom · click the coin slot to vend");
-            spawnCan3D();
-            showDispenseToast(bev);
-          } else {
-            setHint("Can't vend right now (locked or empty)");
-          }
+        window.ZCMachine.zapGate(function(){
+          setHint("Insert coin…");
+          window.ZCMachine.insertCoinAndVend(function(bev){
+            if(bev){
+              setHint("Drag to orbit · scroll to zoom · click the coin slot to vend");
+              spawnCan3D();
+              showDispenseToast(bev);
+            } else {
+              setHint("Can't vend right now (locked or empty)");
+            }
+          });
         });
       }
     },
@@ -2856,7 +2882,9 @@
       // pointer cursor, no more clicks, until the next unit resets it.
       active: function(){ return !(window.ZCMachine && window.ZCMachine.isLatchLocked()); },
       action: function(){
-        if(window.ZCMachine) window.ZCMachine.pressLatch();
+        if(window.ZCMachine) window.ZCMachine.zapGate(function(){
+          window.ZCMachine.pressLatch();
+        });
       }
     },
     {
@@ -2868,19 +2896,21 @@
       point: new THREE.Vector3(-0.68793, 1.00398, 0.024568),
       radius: 0.08,
       action: function(){
-        hackAttemptClicks++;
-        if(window.ZCMachine) window.ZCMachine.playZzt();
-        if(hackAttemptClicks < HACK_CLICKS_REQUIRED){
-          spawnHackSparkBurst(this.point, 15); // small fizzle -- panel's not budging yet
-          setHint("Prying at the panel… (" + hackAttemptClicks + "/" + HACK_CLICKS_REQUIRED + ")");
-          return;
-        }
-        hackAttemptClicks = 0;
-        spawnHackSparkBurst(this.point, 120); // big, thick, pixellated payoff burst
-        if(window.ZCMachine){
+        var self = this;
+        if(!window.ZCMachine) return;
+        window.ZCMachine.zapGate(function(){
+          hackAttemptClicks++;
+          window.ZCMachine.playZzt();
+          if(hackAttemptClicks < HACK_CLICKS_REQUIRED){
+            spawnHackSparkBurst(self.point, 15); // small fizzle -- panel's not budging yet
+            setHint("Prying at the panel… (" + hackAttemptClicks + "/" + HACK_CLICKS_REQUIRED + ")");
+            return;
+          }
+          hackAttemptClicks = 0;
+          spawnHackSparkBurst(self.point, 120); // big, thick, pixellated payoff burst
           window.ZCMachine.playHackBuzz();
           window.ZCMachine.openHackModal();
-        }
+        });
       }
     },
     {
@@ -2890,15 +2920,19 @@
       point: new THREE.Vector3(-0.87900, 0.08032, -0.46648),
       radius: 0.45,
       action: function(){
-        var name = this.name;
-        crackAttemptClicks[name]++;
-        if(window.ZCMachine) window.ZCMachine.playThunk();
-        if(crackAttemptClicks[name] < CRACK_CLICKS_REQUIRED){
-          setHint("Striking the panel… (" + crackAttemptClicks[name] + "/" + CRACK_CLICKS_REQUIRED + ")");
-          return;
-        }
-        crackAttemptClicks[name] = 0;
-        if(window.ZCMachine) window.ZCMachine.openCrackModal();
+        var self = this;
+        if(!window.ZCMachine) return;
+        window.ZCMachine.zapGate(function(){
+          var name = self.name;
+          crackAttemptClicks[name]++;
+          window.ZCMachine.playThunk();
+          if(crackAttemptClicks[name] < CRACK_CLICKS_REQUIRED){
+            setHint("Striking the panel… (" + crackAttemptClicks[name] + "/" + CRACK_CLICKS_REQUIRED + ")");
+            return;
+          }
+          crackAttemptClicks[name] = 0;
+          window.ZCMachine.openCrackModal();
+        });
       }
     },
     {
@@ -2908,15 +2942,19 @@
       point: new THREE.Vector3(0.67327, 0.20904, -0.39255),
       radius: 0.45,
       action: function(){
-        var name = this.name;
-        crackAttemptClicks[name]++;
-        if(window.ZCMachine) window.ZCMachine.playThunk();
-        if(crackAttemptClicks[name] < CRACK_CLICKS_REQUIRED){
-          setHint("Striking the panel… (" + crackAttemptClicks[name] + "/" + CRACK_CLICKS_REQUIRED + ")");
-          return;
-        }
-        crackAttemptClicks[name] = 0;
-        if(window.ZCMachine) window.ZCMachine.openCrackModal();
+        var self = this;
+        if(!window.ZCMachine) return;
+        window.ZCMachine.zapGate(function(){
+          var name = self.name;
+          crackAttemptClicks[name]++;
+          window.ZCMachine.playThunk();
+          if(crackAttemptClicks[name] < CRACK_CLICKS_REQUIRED){
+            setHint("Striking the panel… (" + crackAttemptClicks[name] + "/" + CRACK_CLICKS_REQUIRED + ")");
+            return;
+          }
+          crackAttemptClicks[name] = 0;
+          window.ZCMachine.openCrackModal();
+        });
       }
     }
   ];
