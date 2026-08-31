@@ -589,10 +589,12 @@
 
   /* ---------------------------------------------------------------------
    * Sound framework
-   * - Coin-drop and can-drop SFX play from assets/sfx/coinDrop.mp3 and
-   *   assets/sfx/canDrop.mp3 (courtesy of Kyodon — see the credits in the
-   *   footer). Latch clicks and the jam "clunk" are still synthesised
-   *   with the Web Audio API, since there's no asset for those.
+   * - Coin-drop, hum, and can-drop SFX play from assets/sfx/*.mp3
+   *   (courtesy of Kyodon — see the credits in the footer). Coin-drop and
+   *   hum fire together on insert; a 1.5s beat later (the machine
+   *   "thinking") the can drops and the flavour is revealed. Latch
+   *   clicks and the jam "clunk" are still synthesised with the Web
+   *   Audio API, since there's no asset for those.
    * - Voice lines are looked up by beverage id from VOICE_BASE + "<id>.mp3".
    *   No files are shipped yet — drop recordings into audio/voices/ using
    *   the beverage ids below (klassic, atomka, hammer, frost, geiger,
@@ -626,6 +628,7 @@
   }
   function playCoinDrop(){ playSfx("assets/sfx/coinDrop.mp3"); }
   function playCanDrop(){ playSfx("assets/sfx/canDrop.mp3"); }
+  function playHum(){ playSfx("assets/sfx/hum.mp3"); }
 
   function playLatchClick(freq){
     var ctx = ensureAudioCtx();
@@ -796,7 +799,7 @@
     if(coinState!=="idle" || machine.status==="lockdown" || machine.stores<=0) return;
     coinState = "arming";
     renderCoinSlot();
-    if(soundEnabled) playCoinDrop();
+    if(soundEnabled){ playCoinDrop(); playHum(); }
     var slot = document.querySelector(".coinslot");
     slot.classList.remove("is-inserting");
     void slot.offsetWidth; // restart the animation
@@ -805,7 +808,7 @@
       coinState = "armed";
       renderCoinSlot();
       renderPad();
-    }, 500);
+    }, 1500);
   }
 
   // Same coin-drop + arming beat as insertCoin(), but for the 3D view's
@@ -823,7 +826,7 @@
     }
     coinState = "arming";
     renderCoinSlot();
-    if(soundEnabled) playCoinDrop();
+    if(soundEnabled){ playCoinDrop(); playHum(); }
     window.setTimeout(function(){
       coinState = "armed";
       var pool = availableBeverages(machine.range);
@@ -834,7 +837,7 @@
       renderPad();
       if(soundEnabled){ playCanDrop(); playVoiceLine(bev.id); }
       if(onDone) onDone(bev);
-    }, 500);
+    }, 1500);
   }
 
   function renderPad(){
