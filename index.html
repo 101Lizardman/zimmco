@@ -436,6 +436,28 @@
   .sound-fab svg:not([hidden]){ display:block; }
   .sound-fab svg[hidden]{ display:none; }
 
+  /* ---------- loading screen (covers first render/asset-load stutter) ---------- */
+  .loading-screen{
+    position:fixed; inset:0; z-index:50;
+    background:var(--black);
+    display:flex; align-items:center; justify-content:center;
+    opacity:1; transition:opacity .4s ease;
+  }
+  .loading-screen.is-hiding{ opacity:0; pointer-events:none; }
+  .loading-screen[hidden]{ display:none; }
+  .loading-screen__logo{
+    width:70vw;
+    display:block;
+    animation:loadingSpin 6.4s linear infinite;
+  }
+  @keyframes loadingSpin{
+    from{ transform:perspective(900px) rotateY(0deg); }
+    to{ transform:perspective(900px) rotateY(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .loading-screen__logo{ animation:none; }
+  }
+
   /* ---------- dispense toasts (top-centre, over the 3D display) ---------- */
   .dispense-toasts{
     position:fixed; top:14px; left:50%; transform:translateX(-50%);
@@ -473,6 +495,48 @@
   }
   .dispense-toast__close:hover{ color:var(--white); }
   .dispense-toast__close:focus-visible{ outline:2px solid var(--secondary); outline-offset:2px; }
+  .dispense-toast__title{
+    font-family:'Oswald', sans-serif; font-weight:700; font-size:14px; letter-spacing:.04em; text-transform:uppercase;
+  }
+  /* Stat-check results are the one deliberate exception to the brand-only
+     palette -- pass/fail needs to read as green/red at a glance. */
+  .dispense-toast--success{ border-color:#2ecc71; }
+  .dispense-toast--success .dispense-toast__title{ color:#2ecc71; }
+  .dispense-toast--failure{ border-color:#ff3b3b; }
+  .dispense-toast--failure .dispense-toast__title{ color:#ff3b3b; }
+
+  /* ---------- hacking mini-game modal ---------- */
+  .hack-backdrop{
+    position:fixed; inset:0; z-index:45;
+    background:rgba(0,0,0,.78);
+    display:flex; align-items:center; justify-content:center;
+    padding:20px; box-sizing:border-box;
+  }
+  .hack-backdrop[hidden]{ display:none; }
+  .hack-modal{
+    width:min(90vw, 420px); aspect-ratio:1/1;
+    background:var(--black); border:2px solid var(--secondary);
+    border-radius:12px; box-shadow:var(--shadow);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:18px; padding:28px; box-sizing:border-box; text-align:center;
+  }
+  .hack-modal__heading{
+    font-family:'Oswald', sans-serif; font-weight:700; font-size:22px; letter-spacing:.03em;
+    text-transform:uppercase; color:var(--secondary); margin:0;
+  }
+  .hack-modal__instruction{
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--white-dim);
+    text-transform:uppercase; letter-spacing:.03em; margin:0; line-height:1.5;
+  }
+  .hack-modal__input{
+    width:100%; max-width:200px;
+    font-family:'IBM Plex Mono', monospace; font-size:50px; text-align:center;
+    color:var(--white); background:var(--primary-shade-2);
+    border:2px solid var(--primary-light); border-radius:8px;
+    padding:4px 0;
+  }
+  .hack-modal__input:focus-visible{ outline:2px solid var(--secondary); outline-offset:2px; }
+  .hack-modal__actions{ display:flex; gap:10px; }
 
   /* ---------- admin: hotspot capture (local dev only, see index.html) ---------- */
   .admin-panel{
@@ -514,6 +578,22 @@
   .admin-toast.is-visible{ opacity:1; transform:translateX(-50%) translateY(0); }
   @media (prefers-reduced-motion: reduce){ .admin-toast{ transition:none; } }
 </style>
+
+<div class="loading-screen" id="loadingScreen">
+  <img class="loading-screen__logo" src="assets/banner-noBG.png" alt="ZimmCo Refreshment Beverages">
+</div>
+
+<div class="hack-backdrop" id="hackBackdrop" hidden>
+  <div class="hack-modal" role="dialog" aria-modal="true" aria-labelledby="hackModalHeading">
+    <p class="hack-modal__heading" id="hackModalHeading">Hacking The Mainframe</p>
+    <p class="hack-modal__instruction">Enter INTELLECT stat (+ skill bonuses)</p>
+    <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="hack-modal__input" id="hackInput" autocomplete="off" aria-label="INTELLECT stat">
+    <div class="hack-modal__actions">
+      <button type="button" class="btn btn--fill" id="hackSubmit">Roll</button>
+      <button type="button" class="btn" id="hackCancel">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <div class="admin-panel" id="adminPanel" hidden>
   <div class="admin-panel__title">Admin — Hotspot Capture</div>
@@ -631,6 +711,27 @@
 (function(){
   "use strict";
 
+  // ---- loading screen: covers the first-paint/asset-load stutter (the
+  // 3D module fetching+parsing vendingMachine.glb and pre-warming
+  // tinyCan.glb) behind a spinning logo, up for at least 1s regardless of
+  // how fast assets actually settle. Either view signals readiness via
+  // window.ZCAssetsReady() -- the classic view has nothing async to wait
+  // on and calls it immediately below; the 3D module calls it once both
+  // its model loads have settled (success or failure either way, so a
+  // failed fetch doesn't leave players staring at the logo forever).
+  var LOADING_MIN_MS = 1000;
+  var loadingMinElapsed = false;
+  var loadingAssetsReady = false;
+  function maybeHideLoadingScreen(){
+    if(!loadingMinElapsed || !loadingAssetsReady) return;
+    var el = document.getElementById("loadingScreen");
+    if(!el) return;
+    el.classList.add("is-hiding");
+    window.setTimeout(function(){ el.hidden = true; }, 450); // matches the CSS opacity transition
+  }
+  window.setTimeout(function(){ loadingMinElapsed = true; maybeHideLoadingScreen(); }, LOADING_MIN_MS);
+  window.ZCAssetsReady = function(){ loadingAssetsReady = true; maybeHideLoadingScreen(); };
+
   var BEVERAGES = [
     { id:"klassic", name:"Klassic", range:"all", code:"A1", flavor:"A smooth original flavour that tantalizes your taste receptors.", effect:"+5 to the stat of your choice for your next roll on it." },
     { id:"atomka", name:"Atomka!", range:"classic", code:"B1", flavor:"Diet alternative, emits a soft glow when agitated.", effect:"−1 stress." },
@@ -715,6 +816,75 @@
     src.connect(filter).connect(gain).connect(ctx.destination);
     src.start(now);
     src.stop(now + dur + 0.02);
+  }
+
+  // Harsh electric buzz for jacking into the mainframe hotspot: a detuned
+  // sawtooth/square pair through a bandpass, with the frequency and gain
+  // both jittered in fast random steps for a crackling, arcing quality.
+  function playHackBuzz(){
+    var ctx = ensureAudioCtx();
+    if(!ctx) return;
+    var now = ctx.currentTime;
+    var dur = 0.5;
+
+    var osc1 = ctx.createOscillator();
+    osc1.type = "sawtooth";
+    var osc2 = ctx.createOscillator();
+    osc2.type = "square";
+    osc2.detune.setValueAtTime(-18, now);
+
+    var filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(1200, now);
+    filter.Q.setValueAtTime(6, now);
+
+    var gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.28, now + 0.02);
+
+    var steps = 24;
+    for(var i = 0; i <= steps; i++){
+      var t = now + (dur * i / steps);
+      var f = 180 + Math.random() * 900;
+      osc1.frequency.setValueAtTime(f, t);
+      osc2.frequency.setValueAtTime(f * 0.5, t);
+      gain.gain.setValueAtTime(0.08 + Math.random() * 0.22, t);
+    }
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+    osc1.connect(filter);
+    osc2.connect(filter);
+    filter.connect(gain).connect(ctx.destination);
+    osc1.start(now); osc1.stop(now + dur + 0.02);
+    osc2.start(now); osc2.stop(now + dur + 0.02);
+  }
+
+  // Tiny spark of the same electric-buzz family for each individual
+  // click/tamper on the mainframe hotspot, before it actually gives way.
+  function playZzt(){
+    var ctx = ensureAudioCtx();
+    if(!ctx) return;
+    var now = ctx.currentTime;
+    var dur = 0.09;
+
+    var osc = ctx.createOscillator();
+    osc.type = "square";
+    var filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(1400, now);
+    filter.Q.setValueAtTime(8, now);
+    var gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.22, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+    var steps = 6;
+    for(var i = 0; i <= steps; i++){
+      osc.frequency.setValueAtTime(300 + Math.random() * 700, now + (dur * i / steps));
+    }
+    osc.connect(filter).connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + dur + 0.01);
   }
 
   function playLatchClick(freq){
@@ -865,6 +1035,104 @@
     renderStatusIndicators();
     renderPad();
     renderCoinSlot();
+  }
+
+  /* -----------------------------------------------------------------
+   * Hacking the mainframe (hotspot #9): a d100 stat check against a
+   * player-entered INTELLECT stat.
+   *   roll <= stat, doubles  -> critical success -> machine goes "hacked"
+   *   roll <= stat           -> success          -> machine goes "hacked"
+   *   roll >  stat, doubles  -> critical failure -> lose d4 durability, lockdown
+   *   roll >  stat           -> failure          -> lose d4 durability, lockdown
+   * "Doubles" = the roll's tens and units digits match (11, 22, ... 99,
+   * and 100 counted as "00").
+   * --------------------------------------------------------------- */
+  var HACK_OUTCOME_META = {
+    "success":          { title: "✅ SUCCESS ✅", cls: "dispense-toast--success" },
+    "critical-success": { title: "🎉 CRITICAL SUCCESS 🎉", cls: "dispense-toast--success" },
+    "failure":          { title: "❌ FAILURE ❌", cls: "dispense-toast--failure" },
+    "critical-failure": { title: "🚨 CRITICAL FAILURE 🚨", cls: "dispense-toast--failure" }
+  };
+
+  function showHackResultToast(outcome, roll, stat){
+    var meta = HACK_OUTCOME_META[outcome];
+    var container = document.getElementById("dispenseToasts");
+    var el = document.createElement("div");
+    el.className = "dispense-toast " + meta.cls;
+
+    var body = document.createElement("div");
+    body.className = "dispense-toast__body";
+    var title = document.createElement("div");
+    title.className = "dispense-toast__title";
+    title.textContent = meta.title;
+    var detail = document.createElement("div");
+    detail.className = "dispense-toast__effect";
+    detail.textContent = "Rolled " + roll + " vs stat " + stat + ".";
+    body.appendChild(title);
+    body.appendChild(detail);
+
+    var closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "dispense-toast__close";
+    closeBtn.setAttribute("aria-label", "Close");
+    closeBtn.textContent = "×";
+
+    el.appendChild(body);
+    el.appendChild(closeBtn);
+    container.appendChild(el);
+
+    requestAnimationFrame(function(){ el.classList.add("is-visible"); });
+    var autoTimer = window.setTimeout(dismiss, 5000);
+    function dismiss(){
+      window.clearTimeout(autoTimer);
+      el.classList.remove("is-visible");
+      el.classList.add("is-leaving");
+      window.setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 300);
+    }
+    closeBtn.addEventListener("click", dismiss);
+  }
+
+  function openHackModal(){
+    var input = document.getElementById("hackInput");
+    document.getElementById("hackBackdrop").hidden = false;
+    input.value = "";
+    window.setTimeout(function(){ input.focus(); }, 50);
+  }
+  function closeHackModal(){
+    document.getElementById("hackBackdrop").hidden = true;
+  }
+
+  function submitHackRoll(){
+    var input = document.getElementById("hackInput");
+    var raw = input.value.trim();
+    var stat = parseInt(raw, 10);
+    if(raw === "" || !Number.isFinite(stat) || stat < 0 || stat > 99){
+      input.focus();
+      return; // invalid entry -- leave the modal open rather than roll garbage
+    }
+    closeHackModal();
+
+    var roll = Math.floor(Math.random() * 100); // 0-99
+    var tens = Math.floor(roll / 10);
+    var units = roll % 10;
+    var isDouble = tens === units;
+    // 0 always succeeds, 99 always fails, regardless of stat -- everything
+    // in between is a plain roll-vs-stat comparison.
+    var success = roll === 0 ? true : roll === 99 ? false : roll <= stat;
+
+    var outcome = success
+      ? (isDouble ? "critical-success" : "success")
+      : (isDouble ? "critical-failure" : "failure");
+
+    if(success){
+      setMachineStatus("hacked");
+    } else {
+      var dmg = Math.floor(Math.random() * 4) + 1; // d4
+      machine.durability = Math.max(0, machine.durability - dmg);
+      setMachineStatus("lockdown"); // also re-renders the durability fill + status light
+    }
+
+    showHackResultToast(outcome, roll, stat);
   }
 
   function renderStatusIndicators(){
@@ -1218,11 +1486,21 @@
     setSoundEnabled(!soundEnabled);
   });
 
+  document.getElementById("hackSubmit").addEventListener("click", submitHackRoll);
+  document.getElementById("hackCancel").addEventListener("click", closeHackModal);
+  document.getElementById("hackInput").addEventListener("input", function(){
+    this.value = this.value.replace(/[^0-9]/g, "").slice(0, 2);
+  });
+  document.getElementById("hackInput").addEventListener("keydown", function(e){
+    if(e.key === "Enter") submitHackRoll();
+    else if(e.key === "Escape") closeHackModal();
+  });
+
   window.addEventListener("resize", syncOpeningBackdrop);
 
   // Small handoff point for the separate 3D-view module script (view3d.js)
   // — it can't reach into this IIFE's closure directly.
-  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: function(){ return machine.status; }, setStatus: setMachineStatus };
+  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: function(){ return machine.status; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal };
 
   // 3D is the default view, no on-page control for it. `?classic` in the
   // URL is a dev-only escape hatch back to the DOM/CSS machine (e.g. for
@@ -1233,6 +1511,7 @@
   if(wantsClassic){
     view3d.hidden = true;
     stage.hidden = false;
+    window.ZCAssetsReady(); // nothing async to wait on in the classic view
   } else {
     stage.hidden = true;
     view3d.hidden = false;
@@ -1280,6 +1559,18 @@
   var sparks = []; // { pos:Vector3, vel:Vector3, life, maxLife } -- lockdown spark bursts
   var sparkPoints = null, MAX_SPARKS = 90;
   var lockdownLightWasOn = false; // edge-detect the alarm blink to time spark bursts
+  var hackAttemptClicks = 0;
+  var HACK_CLICKS_REQUIRED = 5; // clicks on the mainframeHack hotspot before it actually opens
+
+  // Two async loads gate the loading screen: the cabinet model and the
+  // can pre-warm below. Each calls this once it settles (success or
+  // failure); once both have, the loading screen is allowed to hide
+  // (still subject to its own 1s minimum -- see the classic script).
+  var pendingAssetLoads = 2;
+  function assetLoadSettled(){
+    pendingAssetLoads--;
+    if(pendingAssetLoads <= 0 && window.ZCAssetsReady) window.ZCAssetsReady();
+  }
   var ready = false;
   var downPt = null;
 
@@ -1383,13 +1674,26 @@
           }
         });
         setHint("Drag to orbit · scroll to zoom · click the coin slot to vend");
+        assetLoadSettled();
       },
       undefined,
       function(err){
         console.error("[view3d] failed to load assets/vendingMachine.glb", err);
         setHint("Could not load assets/vendingMachine.glb — this page needs to be served over http(s), not opened as a file:// URL. Check the console for details.");
+        assetLoadSettled();
       }
     );
+
+    // Pre-warm the can model (fetch, parse, and a first render to force
+    // shader compile + GPU buffer upload) so the first actual vend isn't
+    // the moment that stutter happens. The resulting instance sits static
+    // at the tray's spawn point -- behind the cabinet's own geometry from
+    // the default camera angle, same as any real can before it clears the
+    // opening, so nothing is visibly poking out of the machine.
+    loadCanTemplate(function(template){
+      if(template) spawnPreloadCan();
+      assetLoadSettled();
+    });
 
     renderer.domElement.addEventListener("pointerdown", function(e){
       downPt = { x: e.clientX, y: e.clientY };
@@ -1418,7 +1722,17 @@
     var size = box.getSize(new THREE.Vector3());
     var center = box.getCenter(new THREE.Vector3());
     var maxDim = Math.max(size.x, size.y, size.z) || 1;
-    camera.position.set(center.x, center.y + size.y * 0.15, center.z + maxDim * 1.6);
+
+    // Dead-on offset, then orbited slightly off-centre for a less static
+    // starting shot: ~25° left, ~20° up from straight-on.
+    var offset = new THREE.Vector3(0, size.y * 0.15, maxDim * 1.6);
+    var spherical = new THREE.Spherical().setFromVector3(offset);
+    spherical.theta -= THREE.MathUtils.degToRad(25);
+    spherical.phi -= THREE.MathUtils.degToRad(20);
+    spherical.makeSafe();
+    offset.setFromSpherical(spherical);
+
+    camera.position.copy(center).add(offset);
     camera.near = maxDim / 100;
     camera.far = maxDim * 100;
     camera.updateProjectionMatrix();
@@ -1547,6 +1861,28 @@
         cb(null);
       }
     );
+  }
+
+  // A brief static, physics-free can at the spawn point -- see the
+  // pre-warm call in init(). The spawn point is visible from the default
+  // camera (it's not tucked behind any cabinet geometry), so this can't
+  // just sit there forever without looking like a stray can in the tray.
+  // Instead it only needs to survive one real render to do its job --
+  // forcing the shader compile + GPU buffer upload that would otherwise
+  // stall the first actual vend -- and that render happens comfortably
+  // inside the loading screen's minimum 1s cover, so nothing is ever
+  // visibly on screen.
+  var preloadCanObj = null;
+  function spawnPreloadCan(){
+    if(preloadCanObj || !canTemplate) return;
+    var inst = canTemplate.clone(true);
+    inst.position.copy(TRAY_SPAWN_CENTER);
+    inst.rotation.set(0, Math.random() * Math.PI * 2, 0);
+    scene.add(inst);
+    preloadCanObj = inst;
+    window.setTimeout(function(){
+      if(preloadCanObj){ scene.remove(preloadCanObj); preloadCanObj = null; }
+    }, 150);
   }
 
   function spawnCan3D(){
@@ -1922,6 +2258,30 @@
       active: function(){ return !(window.ZCMachine && window.ZCMachine.isLatchLocked()); },
       action: function(){
         if(window.ZCMachine) window.ZCMachine.pressLatch();
+      }
+    },
+    {
+      // From hotspots/hotspot-9.json (admin capture) -- an exposed panel
+      // on the machine's side. "Attempting" it throws sparks, buzzes, and
+      // opens the INTELLECT stat-check modal (classic script owns the
+      // roll/outcome/state logic; see submitHackRoll).
+      name: "mainframeHack",
+      point: new THREE.Vector3(-0.68793, 1.00398, 0.024568),
+      radius: 0.08,
+      action: function(){
+        hackAttemptClicks++;
+        if(window.ZCMachine) window.ZCMachine.playZzt();
+        if(hackAttemptClicks < HACK_CLICKS_REQUIRED){
+          spawnSparkBurst(this.point, 6); // small fizzle -- panel's not budging yet
+          setHint("Prying at the panel… (" + hackAttemptClicks + "/" + HACK_CLICKS_REQUIRED + ")");
+          return;
+        }
+        hackAttemptClicks = 0;
+        spawnSparkBurst(this.point, 35);
+        if(window.ZCMachine){
+          window.ZCMachine.playHackBuzz();
+          window.ZCMachine.openHackModal();
+        }
       }
     }
   ];
