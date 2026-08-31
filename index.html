@@ -420,6 +420,20 @@
   }
   .view3d__credits a{ color:var(--secondary); pointer-events:auto; }
 
+  /* ---------- floating mute toggle (bottom-left, all views) ---------- */
+  .sound-fab{
+    all:unset; position:fixed; left:16px; bottom:16px; z-index:24;
+    width:46px; height:46px; border-radius:50%; box-sizing:border-box;
+    background:var(--secondary); color:var(--black); cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 14px rgba(0,0,0,.5);
+    transition:filter .15s ease, transform .15s ease;
+  }
+  .sound-fab:hover{ filter:brightness(1.08); }
+  .sound-fab:active{ transform:translateY(1px); }
+  .sound-fab:focus-visible{ outline:2px solid var(--white); outline-offset:3px; }
+  .sound-fab svg{ display:block; pointer-events:none; }
+
   /* ---------- dispense toasts (top-centre, over the 3D display) ---------- */
   .dispense-toasts{
     position:fixed; top:14px; left:50%; transform:translateX(-50%);
@@ -511,6 +525,19 @@
     <button type="button" class="admin-panel__btn" data-status="lockdown">Lock Down</button>
   </div>
 </div>
+
+<button type="button" class="sound-fab" id="soundFab" aria-pressed="true" aria-label="Mute sound effects" title="Mute sound effects">
+  <svg id="soundFabIconOn" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 9v6h4l5 5V4L8 9H4z" fill="currentColor" stroke="none"/>
+    <path d="M15.5 8.5a5 5 0 0 1 0 7"/>
+    <path d="M18.5 5.5a9 9 0 0 1 0 13"/>
+  </svg>
+  <svg id="soundFabIconOff" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden>
+    <path d="M4 9v6h4l5 5V4L8 9H4z" fill="currentColor" stroke="none"/>
+    <circle cx="16.5" cy="12" r="6.5"/>
+    <line x1="12.1" y1="7.6" x2="20.9" y2="16.4"/>
+  </svg>
+</button>
 
 <div id="view3d" hidden>
   <div class="dispense-toasts" id="dispenseToasts" aria-live="polite"></div>
@@ -747,6 +774,24 @@
     b.textContent = "Sound: " + (soundEnabled ? "On" : "Off");
     b.setAttribute("aria-pressed", String(soundEnabled));
     b.classList.toggle("btn--fill", soundEnabled);
+  }
+
+  function renderSoundFab(){
+    var fab = document.getElementById("soundFab");
+    document.getElementById("soundFabIconOn").hidden = !soundEnabled;
+    document.getElementById("soundFabIconOff").hidden = soundEnabled;
+    fab.setAttribute("aria-pressed", String(soundEnabled));
+    var label = soundEnabled ? "Mute sound effects" : "Unmute sound effects";
+    fab.setAttribute("aria-label", label);
+    fab.title = label;
+  }
+
+  function setSoundEnabled(enabled){
+    soundEnabled = enabled;
+    try{ localStorage.setItem("zc-sound", soundEnabled ? "1" : "0"); }catch(e){ /* ignore */ }
+    renderSoundBtn();
+    renderSoundFab();
+    if(soundEnabled) ensureAudioCtx();
   }
 
   function rollRange(){
@@ -1159,10 +1204,10 @@
     renderCoinSlot();
   });
   document.getElementById("btnSound").addEventListener("click", function(){
-    soundEnabled = !soundEnabled;
-    try{ localStorage.setItem("zc-sound", soundEnabled ? "1" : "0"); }catch(e){ /* ignore */ }
-    renderSoundBtn();
-    if(soundEnabled) ensureAudioCtx();
+    setSoundEnabled(!soundEnabled);
+  });
+  document.getElementById("soundFab").addEventListener("click", function(){
+    setSoundEnabled(!soundEnabled);
   });
 
   window.addEventListener("resize", syncOpeningBackdrop);
@@ -1190,6 +1235,7 @@
   }
 
   renderSoundBtn();
+  renderSoundFab();
   newMachine();
   renderStatusIndicators();
   renderPad();
@@ -1223,6 +1269,9 @@
   var hint = document.getElementById("view3dHint");
   var scene, camera, renderer, controls, raycaster, pointer, model;
   var statusLights = []; // { light, normalColor } for every light found in the model
+  var sparks = []; // { pos:Vector3, vel:Vector3, life, maxLife } -- lockdown spark bursts
+  var sparkPoints = null, MAX_SPARKS = 90;
+  var lockdownLightWasOn = false; // edge-detect the alarm blink to time spark bursts
   var ready = false;
   var downPt = null;
 
@@ -1299,6 +1348,8 @@
     var rim = new THREE.DirectionalLight(0xf26521, 0.55);
     rim.position.set(-2.5, 1.2, -2);
     scene.add(rim);
+
+    initSparkSystem();
 
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -1941,9 +1992,89 @@
     renderer.setSize(container.clientWidth, container.clientHeight);
   }
 
+  // Lockdown spark bursts: a little shower of hot orange/red particles off
+  // the status light every time it flashes on, timed to the alarm blink.
+  // Cheap CPU-simulated point sprites -- position/colour buffers are fixed
+  // size (MAX_SPARKS) and only the live prefix is drawn each frame.
+  var SPARK_GRAVITY = 1.4;
+  var SPARK_COLORS = [
+    new THREE.Color(0xf26521), // brand secondary-orange
+    new THREE.Color(0xff2020), // alarm red
+    new THREE.Color(0xffffff)  // white-hot core
+  ];
+
+  function initSparkSystem(){
+    var geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(MAX_SPARKS * 3), 3));
+    geom.setAttribute("color", new THREE.BufferAttribute(new Float32Array(MAX_SPARKS * 3), 3));
+    geom.setDrawRange(0, 0);
+    var mat = new THREE.PointsMaterial({
+      size: 0.012,
+      sizeAttenuation: true,
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    sparkPoints = new THREE.Points(geom, mat);
+    sparkPoints.frustumCulled = false;
+    scene.add(sparkPoints);
+  }
+
+  function spawnSparkBurst(origin, count){
+    for(var i = 0; i < count && sparks.length < MAX_SPARKS; i++){
+      // Roughly forward/outward hemisphere with a strong upward kick, like
+      // sparks thrown off a shorting contact.
+      var theta = Math.random() * Math.PI * 2;
+      var speed = 0.35 + Math.random() * 0.55;
+      var vel = new THREE.Vector3(
+        Math.cos(theta) * speed * 0.5,
+        0.6 + Math.random() * 0.9,
+        Math.sin(theta) * speed * 0.5
+      );
+      var maxLife = 0.28 + Math.random() * 0.35;
+      sparks.push({
+        pos: origin.clone(),
+        vel: vel,
+        life: maxLife,
+        maxLife: maxLife,
+        color: SPARK_COLORS[Math.floor(Math.random() * SPARK_COLORS.length)]
+      });
+    }
+  }
+
+  function stepSparks(dt){
+    if(!sparkPoints) return;
+    if(!sparks.length){
+      if(sparkPoints.geometry.drawRange.count !== 0) sparkPoints.geometry.setDrawRange(0, 0);
+      return;
+    }
+    var posAttr = sparkPoints.geometry.attributes.position;
+    var colAttr = sparkPoints.geometry.attributes.color;
+    var live = 0;
+    for(var i = sparks.length - 1; i >= 0; i--){
+      var s = sparks[i];
+      s.life -= dt;
+      if(s.life <= 0){ sparks.splice(i, 1); continue; }
+      s.vel.y -= SPARK_GRAVITY * dt;
+      s.pos.addScaledVector(s.vel, dt);
+    }
+    for(var j = 0; j < sparks.length && live < MAX_SPARKS; j++, live++){
+      var sp = sparks[j];
+      var fade = Math.max(0, sp.life / sp.maxLife); // additive blend -> fades to black == fades out
+      posAttr.setXYZ(live, sp.pos.x, sp.pos.y, sp.pos.z);
+      colAttr.setXYZ(live, sp.color.r * fade, sp.color.g * fade, sp.color.b * fade);
+    }
+    posAttr.needsUpdate = true;
+    colAttr.needsUpdate = true;
+    sparkPoints.geometry.setDrawRange(0, live);
+  }
+
   // Status light(s) on the model: normal colour, blinking on/off every
-  // 2s; in Lock Down they switch red and blink twice as fast (once/sec).
+  // 2s; in Lock Down they switch red and blink twice as fast (once/sec),
+  // and each flash-on throws a little burst of sparks off the light.
   var STATUS_LIGHT_RED = 0xff2020;
+  var sparkWorldPos = new THREE.Vector3();
   function stepStatusLights(t){
     if(!statusLights.length) return;
     var lockdown = window.ZCMachine && window.ZCMachine.getStatus() === "lockdown";
@@ -1953,6 +2084,13 @@
       s.light.color.set(lockdown ? STATUS_LIGHT_RED : s.normalColor);
       s.light.visible = on;
     });
+    if(lockdown && on && !lockdownLightWasOn){
+      statusLights.forEach(function(s){
+        s.light.getWorldPosition(sparkWorldPos);
+        spawnSparkBurst(sparkWorldPos, 10);
+      });
+    }
+    lockdownLightWasOn = lockdown && on;
   }
 
   var lastTickT = null;
@@ -1962,6 +2100,7 @@
     lastTickT = t;
     if(cans3D.length) stepCans3D(dt);
     stepStatusLights(t);
+    stepSparks(dt);
     controls.update();
     renderer.render(scene, camera);
   }
@@ -1971,7 +2110,7 @@
     resize: onResize,
     // exposes scene internals for hotspot calibration in the console —
     // e.g. window.ZC3D.debug().camera
-    debug: function(){ return { scene: scene, camera: camera, renderer: renderer, raycaster: raycaster, controls: controls, model: model, HOTSPOTS: HOTSPOTS, cans3D: cans3D, spawnCan3D: spawnCan3D, TRAY_SPAWN_CENTER: TRAY_SPAWN_CENTER, TRAY_FLOOR_PLANE: TRAY_FLOOR_PLANE, TRAY_WALLS: TRAY_WALLS, canRadius: canRadius, statusLights: statusLights }; }
+    debug: function(){ return { scene: scene, camera: camera, renderer: renderer, raycaster: raycaster, controls: controls, model: model, HOTSPOTS: HOTSPOTS, cans3D: cans3D, spawnCan3D: spawnCan3D, TRAY_SPAWN_CENTER: TRAY_SPAWN_CENTER, TRAY_FLOOR_PLANE: TRAY_FLOOR_PLANE, TRAY_WALLS: TRAY_WALLS, canRadius: canRadius, statusLights: statusLights, sparks: sparks, spawnSparkBurst: spawnSparkBurst }; }
   };
 
   // This module script always runs after the classic script (module
