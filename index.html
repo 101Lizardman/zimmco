@@ -2442,14 +2442,19 @@
   // 2s; in Lock Down they switch red and blink twice as fast (once/sec),
   // and each flash-on throws a little burst of sparks off the light.
   var STATUS_LIGHT_RED = 0xff2020;
+  var STATUS_LIGHT_SKYBLUE = 0x87ceeb;
   var sparkWorldPos = new THREE.Vector3();
   function stepStatusLights(t){
     if(!statusLights.length) return;
-    var lockdown = window.ZCMachine && window.ZCMachine.getStatus() === "lockdown";
+    var status = window.ZCMachine && window.ZCMachine.getStatus();
+    var lockdown = status === "lockdown";
+    var hacked = status === "hacked";
     var interval = lockdown ? 1000 : 2000;
-    var on = Math.floor(t / interval) % 2 === 0;
+    // Hacked: solid sky blue, no blink. Lockdown: red alarm blink (with
+    // sparks on each flash-on). Anything else: normal colour, slow blink.
+    var on = hacked ? true : (Math.floor(t / interval) % 2 === 0);
     statusLights.forEach(function(s){
-      s.light.color.set(lockdown ? STATUS_LIGHT_RED : s.normalColor);
+      s.light.color.set(lockdown ? STATUS_LIGHT_RED : hacked ? STATUS_LIGHT_SKYBLUE : s.normalColor);
       s.light.visible = on;
     });
     if(lockdown && on && !lockdownLightWasOn){
