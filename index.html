@@ -339,6 +339,9 @@
   .side-tab[hidden]{ display:none; }
   .side-tab--tools{ background:var(--secondary); }
   .side-tab--drinks{ background:var(--primary-light); }
+  /* Hacked-terminal actions tab -- green like the crit-success toast,
+     the one other deliberate exception to the brand-only palette. */
+  .side-tab--hacked{ background:#2ecc71; }
   .side-tab__count{
     writing-mode:horizontal-tb;
     background:var(--black);
@@ -697,6 +700,9 @@
   <button type="button" class="side-tab side-tab--tools" id="toolsTab" aria-expanded="false" aria-controls="sidePanel" hidden>
     Tools <span class="side-tab__count" id="toolsCount">0</span>
   </button>
+  <button type="button" class="side-tab side-tab--hacked" id="hackedTab" aria-expanded="false" aria-controls="sidePanel" hidden>
+    Hacked
+  </button>
 </div>
 <div class="side-backdrop" id="sideBackdrop" hidden></div>
 <aside class="side-panel" id="sidePanel" aria-hidden="true" aria-label="Session log">
@@ -1035,6 +1041,7 @@
     renderStatusIndicators();
     renderPad();
     renderCoinSlot();
+    updateHackedTabVisibility();
   }
 
   /* -----------------------------------------------------------------
@@ -1173,13 +1180,23 @@
     }).join("");
   }
 
-  // One shared slide-out panel for both tabs; opening either one renders
+  // Nothing here yet -- placeholder for whatever a hacked terminal will
+  // eventually let the player do.
+  function renderHackedList(){
+    document.getElementById("sideList").innerHTML =
+      '<li class="side-list__empty" style="background:none;border:none;padding:0;">No actions available yet.</li>';
+  }
+
+  var SIDE_PANEL_TITLES = { tools: "Recovered Tools", drinks: "Dispensed Drinks", hacked: "Hacked Terminal Actions" };
+  var SIDE_PANEL_RENDERERS = { tools: renderToolsList, drinks: renderDrinksList, hacked: renderHackedList };
+
+  // One shared slide-out panel for all tabs; opening any of them renders
   // its content into it and switches the panel to that mode.
   var sidePanelMode = null;
   function openSidePanel(which){
     sidePanelMode = which;
-    document.getElementById("sidePanelTitle").textContent = which === "tools" ? "Recovered Tools" : "Dispensed Drinks";
-    if(which === "tools") renderToolsList(); else renderDrinksList();
+    document.getElementById("sidePanelTitle").textContent = SIDE_PANEL_TITLES[which] || "";
+    (SIDE_PANEL_RENDERERS[which] || renderDrinksList)();
     setSidePanelOpen(true);
   }
   function setSidePanelOpen(open){
@@ -1187,10 +1204,17 @@
     document.getElementById("sidePanel").setAttribute("aria-hidden", String(!open));
     document.getElementById("drinksTab").setAttribute("aria-expanded", String(open && sidePanelMode==="drinks"));
     document.getElementById("toolsTab").setAttribute("aria-expanded", String(open && sidePanelMode==="tools"));
+    document.getElementById("hackedTab").setAttribute("aria-expanded", String(open && sidePanelMode==="hacked"));
     var backdrop = document.getElementById("sideBackdrop");
     backdrop.classList.toggle("is-open", open);
     backdrop.hidden = !open;
     if(!open) sidePanelMode = null;
+  }
+
+  // The Hacked tab only shows up while the machine is actually hacked --
+  // same "don't advertise it before it's relevant" idea as the Tools tab.
+  function updateHackedTabVisibility(){
+    document.getElementById("hackedTab").hidden = machine.status !== "hacked";
   }
 
   function addDispensedDrink(bev){
@@ -1470,6 +1494,7 @@
   document.getElementById("coinLatch").addEventListener("click", pressLatch);
   document.getElementById("drinksTab").addEventListener("click", function(){ openSidePanel("drinks"); });
   document.getElementById("toolsTab").addEventListener("click", function(){ openSidePanel("tools"); });
+  document.getElementById("hackedTab").addEventListener("click", function(){ openSidePanel("hacked"); });
   document.getElementById("sideClose").addEventListener("click", function(){ setSidePanelOpen(false); });
   document.getElementById("sideBackdrop").addEventListener("click", function(){ setSidePanelOpen(false); });
   document.getElementById("btnNewUnit").addEventListener("click", function(){
@@ -1478,6 +1503,7 @@
     renderStatusIndicators();
     renderPad();
     renderCoinSlot();
+    updateHackedTabVisibility();
   });
   document.getElementById("btnSound").addEventListener("click", function(){
     setSoundEnabled(!soundEnabled);
@@ -1528,6 +1554,7 @@
   renderPad();
   renderCoinSlot();
   updateSideTabCounts();
+  updateHackedTabVisibility();
   syncOpeningBackdrop();
 })();
 </script>
@@ -1556,8 +1583,7 @@
   var hint = document.getElementById("view3dHint");
   var scene, camera, renderer, controls, raycaster, pointer, model;
   var statusLights = []; // { light, normalColor } for every light found in the model
-  var sparks = []; // { pos:Vector3, vel:Vector3, life, maxLife } -- lockdown spark bursts
-  var sparkPoints = null, MAX_SPARKS = 90;
+  var MAX_SPARKS = 90; // lockdown alarm's spark system size; see createSparkSystem
   var lockdownLightWasOn = false; // edge-detect the alarm blink to time spark bursts
   var hackAttemptClicks = 0;
   var HACK_CLICKS_REQUIRED = 5; // clicks on the mainframeHack hotspot before it actually opens
@@ -2272,12 +2298,12 @@
         hackAttemptClicks++;
         if(window.ZCMachine) window.ZCMachine.playZzt();
         if(hackAttemptClicks < HACK_CLICKS_REQUIRED){
-          spawnSparkBurst(this.point, 6); // small fizzle -- panel's not budging yet
+          spawnHackSparkBurst(this.point, 15); // small fizzle -- panel's not budging yet
           setHint("Prying at the panel… (" + hackAttemptClicks + "/" + HACK_CLICKS_REQUIRED + ")");
           return;
         }
         hackAttemptClicks = 0;
-        spawnSparkBurst(this.point, 35);
+        spawnHackSparkBurst(this.point, 120); // big, thick, pixellated payoff burst
         if(window.ZCMachine){
           window.ZCMachine.playHackBuzz();
           window.ZCMachine.openHackModal();
@@ -2360,10 +2386,16 @@
     renderer.setSize(container.clientWidth, container.clientHeight);
   }
 
-  // Lockdown spark bursts: a little shower of hot orange/red particles off
-  // the status light every time it flashes on, timed to the alarm blink.
-  // Cheap CPU-simulated point sprites -- position/colour buffers are fixed
-  // size (MAX_SPARKS) and only the live prefix is drawn each frame.
+  // Spark bursts: little showers of hot particles, used both for the
+  // lockdown alarm's flash and the hacking hotspot. Cheap CPU-simulated
+  // point sprites -- position/colour buffers are fixed size and only the
+  // live prefix is drawn each frame. Two independent systems (built by
+  // the same factory) so the hacking sparks can be bigger/thicker/more
+  // numerous without also inflating the lockdown alarm's.
+  // PointsMaterial with no sprite texture renders each point as a flat
+  // square (not a soft circle), which at a larger size reads as chunky,
+  // pixellated shards rather than a smooth glow -- exactly what "thick
+  // pixellated sparks" wants, with no extra texture asset needed.
   var SPARK_GRAVITY = 1.4;
   var SPARK_COLORS = [
     new THREE.Color(0xf26521), // brand secondary-orange
@@ -2371,71 +2403,88 @@
     new THREE.Color(0xffffff)  // white-hot core
   ];
 
-  function initSparkSystem(){
+  function createSparkSystem(maxCount, pointSize){
+    var list = [];
     var geom = new THREE.BufferGeometry();
-    geom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(MAX_SPARKS * 3), 3));
-    geom.setAttribute("color", new THREE.BufferAttribute(new Float32Array(MAX_SPARKS * 3), 3));
+    geom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(maxCount * 3), 3));
+    geom.setAttribute("color", new THREE.BufferAttribute(new Float32Array(maxCount * 3), 3));
     geom.setDrawRange(0, 0);
     var mat = new THREE.PointsMaterial({
-      size: 0.012,
+      size: pointSize,
       sizeAttenuation: true,
       vertexColors: true,
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending
     });
-    sparkPoints = new THREE.Points(geom, mat);
-    sparkPoints.frustumCulled = false;
-    scene.add(sparkPoints);
-  }
+    var points = new THREE.Points(geom, mat);
+    points.frustumCulled = false;
+    scene.add(points);
 
-  function spawnSparkBurst(origin, count){
-    for(var i = 0; i < count && sparks.length < MAX_SPARKS; i++){
-      // Roughly forward/outward hemisphere with a strong upward kick, like
-      // sparks thrown off a shorting contact.
-      var theta = Math.random() * Math.PI * 2;
-      var speed = 0.35 + Math.random() * 0.55;
-      var vel = new THREE.Vector3(
-        Math.cos(theta) * speed * 0.5,
-        0.6 + Math.random() * 0.9,
-        Math.sin(theta) * speed * 0.5
-      );
-      var maxLife = 0.28 + Math.random() * 0.35;
-      sparks.push({
-        pos: origin.clone(),
-        vel: vel,
-        life: maxLife,
-        maxLife: maxLife,
-        color: SPARK_COLORS[Math.floor(Math.random() * SPARK_COLORS.length)]
-      });
+    function spawn(origin, count){
+      for(var i = 0; i < count && list.length < maxCount; i++){
+        // Roughly forward/outward hemisphere with a strong upward kick,
+        // like sparks thrown off a shorting contact.
+        var theta = Math.random() * Math.PI * 2;
+        var speed = 0.35 + Math.random() * 0.55;
+        var vel = new THREE.Vector3(
+          Math.cos(theta) * speed * 0.5,
+          0.6 + Math.random() * 0.9,
+          Math.sin(theta) * speed * 0.5
+        );
+        var maxLife = 0.28 + Math.random() * 0.35;
+        list.push({
+          pos: origin.clone(),
+          vel: vel,
+          life: maxLife,
+          maxLife: maxLife,
+          color: SPARK_COLORS[Math.floor(Math.random() * SPARK_COLORS.length)]
+        });
+      }
     }
+
+    function step(dt){
+      if(!list.length){
+        if(points.geometry.drawRange.count !== 0) points.geometry.setDrawRange(0, 0);
+        return;
+      }
+      var posAttr = points.geometry.attributes.position;
+      var colAttr = points.geometry.attributes.color;
+      for(var i = list.length - 1; i >= 0; i--){
+        var s = list[i];
+        s.life -= dt;
+        if(s.life <= 0){ list.splice(i, 1); continue; }
+        s.vel.y -= SPARK_GRAVITY * dt;
+        s.pos.addScaledVector(s.vel, dt);
+      }
+      var live = 0;
+      for(var j = 0; j < list.length && live < maxCount; j++, live++){
+        var sp = list[j];
+        var fade = Math.max(0, sp.life / sp.maxLife); // additive blend -> fades to black == fades out
+        posAttr.setXYZ(live, sp.pos.x, sp.pos.y, sp.pos.z);
+        colAttr.setXYZ(live, sp.color.r * fade, sp.color.g * fade, sp.color.b * fade);
+      }
+      posAttr.needsUpdate = true;
+      colAttr.needsUpdate = true;
+      points.geometry.setDrawRange(0, live);
+    }
+
+    return { list: list, spawn: spawn, step: step };
   }
 
+  var lockdownSparkSys = null; // small, for the lockdown alarm flash
+  var hackSparkSys = null;     // big, thick, pixellated -- the hacking hotspot
+
+  function initSparkSystem(){
+    lockdownSparkSys = createSparkSystem(MAX_SPARKS, 0.012);
+    hackSparkSys = createSparkSystem(300, 0.05);
+  }
+
+  function spawnSparkBurst(origin, count){ lockdownSparkSys.spawn(origin, count); }
+  function spawnHackSparkBurst(origin, count){ hackSparkSys.spawn(origin, count); }
   function stepSparks(dt){
-    if(!sparkPoints) return;
-    if(!sparks.length){
-      if(sparkPoints.geometry.drawRange.count !== 0) sparkPoints.geometry.setDrawRange(0, 0);
-      return;
-    }
-    var posAttr = sparkPoints.geometry.attributes.position;
-    var colAttr = sparkPoints.geometry.attributes.color;
-    var live = 0;
-    for(var i = sparks.length - 1; i >= 0; i--){
-      var s = sparks[i];
-      s.life -= dt;
-      if(s.life <= 0){ sparks.splice(i, 1); continue; }
-      s.vel.y -= SPARK_GRAVITY * dt;
-      s.pos.addScaledVector(s.vel, dt);
-    }
-    for(var j = 0; j < sparks.length && live < MAX_SPARKS; j++, live++){
-      var sp = sparks[j];
-      var fade = Math.max(0, sp.life / sp.maxLife); // additive blend -> fades to black == fades out
-      posAttr.setXYZ(live, sp.pos.x, sp.pos.y, sp.pos.z);
-      colAttr.setXYZ(live, sp.color.r * fade, sp.color.g * fade, sp.color.b * fade);
-    }
-    posAttr.needsUpdate = true;
-    colAttr.needsUpdate = true;
-    sparkPoints.geometry.setDrawRange(0, live);
+    lockdownSparkSys.step(dt);
+    hackSparkSys.step(dt);
   }
 
   // Status light(s) on the model: normal colour, blinking on/off every
@@ -2483,7 +2532,7 @@
     resize: onResize,
     // exposes scene internals for hotspot calibration in the console —
     // e.g. window.ZC3D.debug().camera
-    debug: function(){ return { scene: scene, camera: camera, renderer: renderer, raycaster: raycaster, controls: controls, model: model, HOTSPOTS: HOTSPOTS, cans3D: cans3D, spawnCan3D: spawnCan3D, TRAY_SPAWN_CENTER: TRAY_SPAWN_CENTER, TRAY_FLOOR_PLANE: TRAY_FLOOR_PLANE, TRAY_WALLS: TRAY_WALLS, canRadius: canRadius, statusLights: statusLights, sparks: sparks, spawnSparkBurst: spawnSparkBurst }; }
+    debug: function(){ return { scene: scene, camera: camera, renderer: renderer, raycaster: raycaster, controls: controls, model: model, HOTSPOTS: HOTSPOTS, cans3D: cans3D, spawnCan3D: spawnCan3D, TRAY_SPAWN_CENTER: TRAY_SPAWN_CENTER, TRAY_FLOOR_PLANE: TRAY_FLOOR_PLANE, TRAY_WALLS: TRAY_WALLS, canRadius: canRadius, statusLights: statusLights, sparks: lockdownSparkSys.list, hackSparks: hackSparkSys.list, spawnSparkBurst: spawnSparkBurst, spawnHackSparkBurst: spawnHackSparkBurst }; }
   };
 
   // This module script always runs after the classic script (module
