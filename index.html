@@ -409,13 +409,22 @@
   .hacked-password-input::placeholder{ color:var(--white-faint); }
   .hacked-password-input:focus-visible{ outline:2px solid #2ecc71; outline-offset:2px; }
   .hacked-tile{
-    all:unset; width:100%; box-sizing:border-box; cursor:pointer;
+    all:unset; display:flex; flex-direction:column; gap:2px;
+    width:100%; box-sizing:border-box; cursor:pointer;
     background:var(--black); border:1px solid #2ecc71; border-radius:6px;
-    padding:8px 10px; font-family:'IBM Plex Mono', monospace; font-size:12px; color:#2ecc71;
+    padding:8px 10px;
     transition:transform .1s ease, filter .1s ease;
   }
   .hacked-tile:hover{ filter:brightness(1.2); }
   .hacked-tile.is-pressed{ transform:scale(.96); filter:brightness(1.4); }
+  .hacked-tile__title{
+    font-family:'Oswald', sans-serif; font-weight:600; font-size:12px;
+    text-transform:uppercase; letter-spacing:.02em; color:#2ecc71;
+  }
+  .hacked-tile__body{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--white-dim);
+    line-height:1.4;
+  }
 
   /* ---------- 3D view (the default view — no on-page toggle) ---------- */
   #view3d{
@@ -1204,9 +1213,10 @@
   // session (not per machine unit) -- re-entering a spent password does
   // nothing, same as a wrong one.
   var HACKED_PASSWORDS = {
-    "hello": { tileLabel: "hello world!", used: false }
+    "hello": { title: "hello world!", used: false },
+    "matrix": { title: "Terminal", body: "You can gain access to the local network, gaining control of other nearby systems", used: false }
   };
-  var hackedTiles = []; // { label } -- accumulates for the session
+  var hackedTiles = []; // { title, body? } -- accumulates for the session
 
   function submitHackedPassword(input){
     var pw = input.value.trim().toLowerCase();
@@ -1214,19 +1224,28 @@
     var entry = HACKED_PASSWORDS[pw];
     if(!entry || entry.used) return; // wrong, or already spent -- leave their input as typed
     entry.used = true;
-    hackedTiles.push({ label: entry.tileLabel });
+    hackedTiles.push({ title: entry.title, body: entry.body });
     renderHackedList();
   }
 
+  function hackedTileHtml(title, body, attrs){
+    return '<li><button type="button" class="hacked-tile" '+(attrs||'')+'>' +
+      '<span class="hacked-tile__title">'+esc(title)+'</span>' +
+      (body ? '<span class="hacked-tile__body">'+esc(body)+'</span>' : '') +
+      '</button></li>';
+  }
+
   function renderHackedList(){
-    var tilesHtml = hackedTiles.length
-      ? hackedTiles.map(function(t, i){
-          return '<li><button type="button" class="hacked-tile" data-tile-i="'+i+'">'+esc(t.label)+'</button></li>';
-        }).join("")
-      : '<li class="side-list__empty" style="background:none;border:none;padding:0;">No actions available yet.</li>';
+    // Always available, no password needed.
+    var builtinTilesHtml = hackedTileHtml("CRACK IT OPEN", "Open the machine without damaging it", 'id="hackedCrackOpenTile"');
+
+    var tilesHtml = hackedTiles.map(function(t, i){
+      return hackedTileHtml(t.title, t.body, 'data-tile-i="'+i+'"');
+    }).join("");
 
     document.getElementById("sideList").innerHTML =
       '<li class="hacked-password-row"><input type="text" class="hacked-password-input" id="hackedPasswordInput" placeholder="password…" autocomplete="off" aria-label="Password"></li>' +
+      builtinTilesHtml +
       tilesHtml;
 
     document.getElementById("hackedPasswordInput").addEventListener("keydown", function(e){
@@ -1237,6 +1256,9 @@
         btn.classList.add("is-pressed");
         window.setTimeout(function(){ btn.classList.remove("is-pressed"); }, 150);
       });
+    });
+    document.getElementById("hackedCrackOpenTile").addEventListener("click", function(){
+      if(window.ZCMachine) window.ZCMachine.setStatus("opened");
     });
   }
 
