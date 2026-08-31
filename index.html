@@ -1031,6 +1031,13 @@
   // Tool drawer table, indexed by d10 roll (0-9): 0-1 Nothing, 2-4 Mechanical
   // toolkit, 5-6 Crowbar, 7-8 Electronic tool set, 9 Lockpick set.
   var TOOLS_TABLE = ["Nothing","Nothing","Mechanical toolkit","Mechanical toolkit","Mechanical toolkit","Crowbar","Crowbar","Electronic tool set","Electronic tool set","Lockpick set"];
+  var TOOL_DESCRIPTIONS = {
+    "Nothing": "Someone else beat you to it",
+    "Mechanical toolkit": "A neatly arranged, well worn set of basic tools",
+    "Crowbar": "A ZimmCo branded levering tool",
+    "Electronic tool set": "A variety of technical tools for electronics work",
+    "Lockpick set": "Engraved with Comrade Zimmski and the Cosmonauts"
+  };
   var toolsCollected = [];
   var drinksDispensed = [];
 
@@ -1041,6 +1048,11 @@
   var latchClicks = 0;
   var latchLocked = false;
 
+  // Lock Down / Operational is the one state that flips back and forth
+  // freely. Hacked and Opened are sticky facts about this physical unit
+  // once true they stay true regardless of any later state change (a
+  // failed hack attempt after a successful one still leaves it Hacked,
+  // just also back in Lock Down) -- only a brand new unit clears them.
   var machine = {};
   function newMachine(){
     var durability = d10();
@@ -1050,7 +1062,9 @@
       stores: durability*100,
       range: rr.range,
       rangeLabel: rr.label,
-      status: durability===0 ? "lockdown" : "operational"
+      lockdown: durability===0,
+      hacked: false,
+      opened: false
     };
     document.getElementById("dispenseCaption").textContent = "— nothing dispensed yet —";
     clearAllCans();
@@ -1059,17 +1073,32 @@
     document.getElementById("coinLatch").disabled = false;
   }
 
+  // Priority label for the single-word displays (status light colour,
+  // admin "current state" fallback) -- Lock Down alarms over everything,
+  // Hacked over Opened, otherwise Operational. Tab visibility and vend
+  // gating use the raw flags below instead, since Hacked/Opened aren't
+  // mutually exclusive with Lock Down any more.
+  function machineStatusLabel(){
+    if(machine.lockdown) return "lockdown";
+    if(machine.hacked) return "hacked";
+    if(machine.opened) return "opened";
+    return "operational";
+  }
+
   // Only "operational" (and "hacked" -- the panel's off, but the machine
   // still works) will actually dispense. "opened" and "lockdown" both
   // refuse the coin, same as running out of stores.
   function canVend(){
-    return machine.stores>0 && machine.status!=="lockdown" && machine.status!=="opened";
+    return machine.stores>0 && !machine.lockdown && !machine.opened;
   }
 
   var FORCEABLE_STATES = ["operational","opened","hacked","lockdown"];
   function setMachineStatus(status){
     if(FORCEABLE_STATES.indexOf(status)===-1) return;
-    machine.status = status;
+    if(status === "operational") machine.lockdown = false;
+    else if(status === "lockdown") machine.lockdown = true;
+    else if(status === "opened") machine.opened = true; // sticky -- no "un-open"
+    else if(status === "hacked") machine.hacked = true; // sticky -- no "un-hack"
     renderStatusIndicators();
     renderPad();
     renderCoinSlot();
@@ -1179,7 +1208,7 @@
     var pct = Math.max(0, Math.min(100, Math.round(machine.durability / 9 * 100)));
     document.getElementById("durabilityFill").style.height = pct + "%";
     var light = document.getElementById("statusLight");
-    light.classList.toggle("is-lockdown", machine.status==="lockdown");
+    light.classList.toggle("is-lockdown", machine.lockdown);
   }
 
   // Tab badge counts, and the Tools tab only ever appears once there's
@@ -1209,7 +1238,14 @@
       return;
     }
     list.innerHTML = toolsCollected.map(function(tool, i){
-      return '<li><span>'+esc(tool)+'</span><span class="n">#'+(i+1)+'</span></li>';
+      var desc = TOOL_DESCRIPTIONS[tool];
+      if(!desc){
+        return '<li><span>'+esc(tool)+'</span><span class="n">#'+(i+1)+'</span></li>';
+      }
+      return '<li class="side-list__drink">' +
+        '<span class="side-list__drink-name">'+esc(tool)+' <span class="n">#'+(i+1)+'</span></span>' +
+        '<span class="side-list__drink-effect">'+esc(desc)+'</span>' +
+        '</li>';
     }).join("");
   }
 
@@ -1296,7 +1332,7 @@
   // The Hacked tab only shows up while the machine is actually hacked --
   // same "don't advertise it before it's relevant" idea as the Tools tab.
   function updateHackedTabVisibility(){
-    document.getElementById("hackedTab").hidden = machine.status !== "hacked";
+    document.getElementById("hackedTab").hidden = !machine.hacked;
   }
 
   // Nothing here yet -- placeholder for whatever an opened machine's
@@ -1308,7 +1344,7 @@
 
   // Same idea as the Hacked tab, but for the Opened state.
   function updateInternalsTabVisibility(){
-    document.getElementById("internalsTab").hidden = machine.status !== "opened";
+    document.getElementById("internalsTab").hidden = !machine.opened;
   }
 
   function addDispensedDrink(bev){
@@ -1622,7 +1658,7 @@
 
   // Small handoff point for the separate 3D-view module script (view3d.js)
   // — it can't reach into this IIFE's closure directly.
-  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: function(){ return machine.status; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal };
+  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: machineStatusLabel, isLockdown: function(){ return machine.lockdown; }, isHacked: function(){ return machine.hacked; }, isOpened: function(){ return machine.opened; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal };
 
   // 3D is the default view, no on-page control for it. `?classic` in the
   // URL is a dev-only escape hatch back to the DOM/CSS machine (e.g. for
@@ -2286,9 +2322,16 @@
   }
 
   function refreshAdminStateButtons(){
-    var current = window.ZCMachine && window.ZCMachine.getStatus();
+    if(!window.ZCMachine) return;
+    var lockdown = window.ZCMachine.isLockdown();
+    var hacked = window.ZCMachine.isHacked();
+    var opened = window.ZCMachine.isOpened();
+    // Lock Down/Operational are mutually exclusive; Hacked/Opened are
+    // sticky facts that can be active alongside either one -- so more
+    // than one button can be lit at once now.
+    var activeMap = { lockdown: lockdown, operational: !lockdown, hacked: hacked, opened: opened };
     document.querySelectorAll("#adminStates .admin-panel__btn").forEach(function(btn){
-      btn.classList.toggle("is-active", btn.dataset.status === current);
+      btn.classList.toggle("is-active", !!activeMap[btn.dataset.status]);
     });
   }
 
@@ -2592,9 +2635,8 @@
   var sparkWorldPos = new THREE.Vector3();
   function stepStatusLights(t){
     if(!statusLights.length) return;
-    var status = window.ZCMachine && window.ZCMachine.getStatus();
-    var lockdown = status === "lockdown";
-    var hacked = status === "hacked";
+    var lockdown = window.ZCMachine && window.ZCMachine.isLockdown();
+    var hacked = window.ZCMachine && window.ZCMachine.isHacked();
     var interval = lockdown ? 1000 : 2000;
     // Hacked: solid sky blue, no blink. Lockdown: red alarm blink (with
     // sparks on each flash-on). Anything else: normal colour, slow blink.
