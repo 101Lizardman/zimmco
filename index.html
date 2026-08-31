@@ -1821,8 +1821,8 @@
 
     // Brand-only lighting: neutral fill + a warm secondary-orange rim, no
     // colours outside the primary/secondary/neutral palette -- except
-    // during Lock Down, where stepSceneLighting() below washes all three
-    // red as a deliberate alarm-state exception.
+    // during Lock Down, where stepSceneLighting() below turns the front
+    // key light red as a deliberate alarm-state exception.
     sceneHemiLight = new THREE.HemisphereLight(0xffffff, 0x00294f, 1.1);
     scene.add(sceneHemiLight);
     sceneKeyLight = new THREE.DirectionalLight(0xffffff, 1.7);
@@ -2679,17 +2679,15 @@
     lockdownLightWasOn = lockdown && on;
   }
 
-  // Scene-wide fill/key/rim lights wash solid red for as long as Lock
-  // Down holds (no blink -- that's the status light's job), and revert
-  // the moment it's lifted.
+  // Front key light washes solid red for as long as Lock Down holds (no
+  // blink -- that's the status light's job), and reverts the moment
+  // it's lifted.
   var SCENE_LIGHT_RED = 0xff2020;
-  var SCENE_LIGHT_RED_DARK = 0x3a0000;
   function stepSceneLighting(){
+    // Just the front key light goes red for Lock Down -- the hemisphere
+    // fill and the rim light stay their normal brand colours.
     var lockdown = !!(window.ZCMachine && window.ZCMachine.isLockdown());
-    sceneHemiLight.color.setHex(lockdown ? SCENE_LIGHT_RED : 0xffffff);
-    sceneHemiLight.groundColor.setHex(lockdown ? SCENE_LIGHT_RED_DARK : 0x00294f);
     sceneKeyLight.color.setHex(lockdown ? SCENE_LIGHT_RED : 0xffffff);
-    sceneRimLight.color.setHex(lockdown ? SCENE_LIGHT_RED : 0xf26521);
   }
 
   var lastTickT = null;
