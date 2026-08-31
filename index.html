@@ -1057,6 +1057,43 @@
     src.stop(now + dur + 0.01);
   }
 
+  // A valve-like "tsshhhhh" steam release for the moment the machine
+  // actually gets cracked open: filtered white noise, a quick burst of
+  // an attack then a long narrowing hiss as it trails off.
+  function playSteamHiss(){
+    if(!soundEnabled) return;
+    var ctx = ensureAudioCtx();
+    if(!ctx) return;
+    var now = ctx.currentTime;
+    var dur = 0.9;
+
+    var bufSize = Math.max(1, Math.round(ctx.sampleRate * dur));
+    var buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+    var data = buffer.getChannelData(0);
+    for(var i = 0; i < bufSize; i++){
+      data[i] = Math.random() * 2 - 1;
+    }
+    var src = ctx.createBufferSource();
+    src.buffer = buffer;
+
+    var filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(6000, now);
+    filter.frequency.exponentialRampToValueAtTime(2200, now + dur);
+    filter.Q.setValueAtTime(0.7, now);
+    filter.Q.linearRampToValueAtTime(2.5, now + dur);
+
+    var gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.35, now + 0.03); // the valve bursts open
+    gain.gain.setValueAtTime(0.35, now + 0.15);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur); // long hiss tail-off
+
+    src.connect(filter).connect(gain).connect(ctx.destination);
+    src.start(now);
+    src.stop(now + dur + 0.02);
+  }
+
   var VOICE_BASE = "audio/voices/";
   function playVoiceLine(id){
     try{
@@ -1399,6 +1436,7 @@
       var stockLost = excess * 50;
       if(stockLost > 0) machine.stores = Math.max(0, machine.stores - stockLost);
       setMachineStatus("opened"); // re-renders the durability fill, pad, coin slot, tabs
+      playSteamHiss();
       showResultToast("", "Cracked Open!", stockLost > 0
         ? "Durability destroyed. " + stockLost + " cans of stock lost in the process."
         : "Durability destroyed.");
@@ -1511,6 +1549,7 @@
     });
     document.getElementById("hackedCrackOpenTile").addEventListener("click", function(){
       if(window.ZCMachine) window.ZCMachine.setStatus("opened");
+      playSteamHiss();
     });
   }
 
