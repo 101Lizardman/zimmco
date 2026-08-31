@@ -419,6 +419,7 @@
   }
   .hacked-tile:hover{ filter:brightness(1.2); }
   .hacked-tile.is-pressed{ transform:scale(.96); filter:brightness(1.4); }
+  .hacked-tile.is-disabled{ opacity:.35; filter:grayscale(1); cursor:default; pointer-events:none; }
   .hacked-tile__title{
     font-family:'Oswald', sans-serif; font-weight:600; font-size:12px;
     text-transform:uppercase; letter-spacing:.02em; color:#2ecc71;
@@ -635,6 +636,18 @@
     <div class="hack-modal__actions">
       <button type="button" class="btn btn--fill" id="crackSubmit">Confirm</button>
       <button type="button" class="btn" id="crackCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="hack-backdrop" id="statCheckBackdrop" hidden>
+  <div class="hack-modal" role="dialog" aria-modal="true" aria-labelledby="statCheckHeading">
+    <p class="hack-modal__heading" id="statCheckHeading"></p>
+    <p class="hack-modal__instruction" id="statCheckInstruction"></p>
+    <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="hack-modal__input" id="statCheckInput" autocomplete="off" aria-label="Stat value">
+    <div class="hack-modal__actions">
+      <button type="button" class="btn btn--fill" id="statCheckSubmit">Roll</button>
+      <button type="button" class="btn" id="statCheckCancel">Cancel</button>
     </div>
   </div>
 </div>
@@ -1111,7 +1124,8 @@
     "Mechanical toolkit": "A neatly arranged, well worn set of basic tools",
     "Crowbar": "A ZimmCo branded levering tool",
     "Electronic tool set": "A variety of technical tools for electronics work",
-    "Lockpick set": "Engraved with Comrade Zimmski and the Cosmonauts"
+    "Lockpick set": "Engraved with Comrade Zimmski and the Cosmonauts",
+    "Transceiver": "A crude long-distance radio, only capable of sending rudimentary communications"
   };
   var toolsCollected = [];
   var drinksDispensed = [];
@@ -1139,7 +1153,8 @@
       rangeLabel: rr.label,
       lockdown: durability===0,
       hacked: false,
-      opened: false
+      opened: false,
+      sheltered: false
     };
     document.getElementById("dispenseCaption").textContent = "— nothing dispensed yet —";
     clearAllCans();
@@ -1245,6 +1260,19 @@
     showResultToast(meta.cls, meta.title, "Rolled " + roll + " vs stat " + stat + ".");
   }
 
+  // Shared d100 stat-check roll: 0 always succeeds, 99 always fails
+  // (regardless of stat), doubles are a critical either way, otherwise
+  // it's a plain roll-vs-stat comparison. Used by every stat check in
+  // the game (hacking, Extract Transceiver, Jump Start).
+  function rollStatCheck(stat){
+    var roll = Math.floor(Math.random() * 100); // 0-99
+    var tens = Math.floor(roll / 10);
+    var units = roll % 10;
+    var isDouble = tens === units;
+    var success = roll === 0 ? true : roll === 99 ? false : roll <= stat;
+    return { roll: roll, isDouble: isDouble, success: success };
+  }
+
   function openHackModal(){
     var input = document.getElementById("hackInput");
     document.getElementById("hackBackdrop").hidden = false;
@@ -1265,19 +1293,12 @@
     }
     closeHackModal();
 
-    var roll = Math.floor(Math.random() * 100); // 0-99
-    var tens = Math.floor(roll / 10);
-    var units = roll % 10;
-    var isDouble = tens === units;
-    // 0 always succeeds, 99 always fails, regardless of stat -- everything
-    // in between is a plain roll-vs-stat comparison.
-    var success = roll === 0 ? true : roll === 99 ? false : roll <= stat;
+    var result = rollStatCheck(stat);
+    var outcome = result.success
+      ? (result.isDouble ? "critical-success" : "success")
+      : (result.isDouble ? "critical-failure" : "failure");
 
-    var outcome = success
-      ? (isDouble ? "critical-success" : "success")
-      : (isDouble ? "critical-failure" : "failure");
-
-    if(success){
+    if(result.success){
       setMachineStatus("hacked");
     } else {
       var dmg = Math.floor(Math.random() * 4) + 1; // d4
@@ -1285,7 +1306,55 @@
       setMachineStatus("lockdown"); // also re-renders the durability fill + status light
     }
 
-    showHackResultToast(outcome, roll, stat);
+    showHackResultToast(outcome, result.roll, stat);
+  }
+
+  /* -----------------------------------------------------------------
+   * Generic reusable stat-check modal (used by Extract Transceiver and
+   * Jump Start) -- same UI/roll rules as the hacking modal above, but
+   * with configurable heading/instruction text and a result callback
+   * instead of hardcoded hacked/lockdown side effects. "disadvantage"
+   * rolls twice and keeps the caller-chosen one (Jump Start explicitly
+   * wants the lower of the two).
+   * --------------------------------------------------------------- */
+  var statCheckOnResolve = null;
+  var statCheckDisadvantage = false;
+  function openStatCheckModal(heading, instruction, disadvantage, onResolve){
+    document.getElementById("statCheckHeading").textContent = heading;
+    document.getElementById("statCheckInstruction").textContent = instruction;
+    statCheckDisadvantage = !!disadvantage;
+    statCheckOnResolve = onResolve;
+    var input = document.getElementById("statCheckInput");
+    input.value = "";
+    document.getElementById("statCheckBackdrop").hidden = false;
+    window.setTimeout(function(){ input.focus(); }, 50);
+  }
+  function closeStatCheckModal(){
+    document.getElementById("statCheckBackdrop").hidden = true;
+  }
+  function submitStatCheck(){
+    var input = document.getElementById("statCheckInput");
+    var raw = input.value.trim();
+    var stat = parseInt(raw, 10);
+    if(raw === "" || !Number.isFinite(stat) || stat < 0 || stat > 99){
+      input.focus();
+      return;
+    }
+    closeStatCheckModal();
+
+    var result;
+    if(statCheckDisadvantage){
+      var a = rollStatCheck(stat), b = rollStatCheck(stat);
+      result = a.roll <= b.roll ? a : b; // "roll twice... choose the lowest", as specified
+      result.rolls = [a.roll, b.roll];
+    } else {
+      result = rollStatCheck(stat);
+      result.rolls = [result.roll];
+    }
+
+    var cb = statCheckOnResolve;
+    statCheckOnResolve = null;
+    if(cb) cb(result, stat);
   }
 
   /* -----------------------------------------------------------------
@@ -1393,7 +1462,7 @@
     "hello": { title: "hello world!", used: false },
     "matrix": { title: "Terminal", body: "You can gain access to the local network, gaining control of other nearby systems", used: false }
   };
-  var hackedTiles = []; // { title, body? } -- accumulates for the session
+  var hackedTiles = []; // { key, title, body? } -- accumulates for the session
 
   function submitHackedPassword(input){
     var pw = input.value.trim().toLowerCase();
@@ -1401,12 +1470,15 @@
     var entry = HACKED_PASSWORDS[pw];
     if(!entry || entry.used) return; // wrong, or already spent -- leave their input as typed
     entry.used = true;
-    hackedTiles.push({ title: entry.title, body: entry.body });
+    hackedTiles.push({ key: pw, title: entry.title, body: entry.body });
     renderHackedList();
   }
 
-  function hackedTileHtml(title, body, attrs){
-    return '<li><button type="button" class="hacked-tile" '+(attrs||'')+'>' +
+  // isDisabled greys the tile out and makes it a real disabled <button>
+  // (so it stops dispatching click events on its own, no extra guard
+  // needed at each call site).
+  function hackedTileHtml(title, body, attrs, isDisabled){
+    return '<li><button type="button" class="hacked-tile'+(isDisabled ? ' is-disabled' : '')+'" '+(attrs||'')+(isDisabled ? ' disabled' : '')+'>' +
       '<span class="hacked-tile__title">'+esc(title)+'</span>' +
       (body ? '<span class="hacked-tile__body">'+esc(body)+'</span>' : '') +
       '</button></li>';
@@ -1417,7 +1489,10 @@
     var builtinTilesHtml = hackedTileHtml("CRACK IT OPEN", "Open the machine without damaging it", 'id="hackedCrackOpenTile"');
 
     var tilesHtml = hackedTiles.map(function(t, i){
-      return hackedTileHtml(t.title, t.body, 'data-tile-i="'+i+'"');
+      // The Terminal tile (from "matrix") gets shut off once you've
+      // sheltered inside -- see SHELTER's effect.
+      var disabled = t.key === "matrix" && machine.sheltered;
+      return hackedTileHtml(t.title, t.body, 'data-tile-i="'+i+'"', disabled);
     }).join("");
 
     document.getElementById("sideList").innerHTML =
@@ -1472,9 +1547,137 @@
 
   // Nothing here yet -- placeholder for whatever an opened machine's
   // exposed internals will eventually let the player do.
+  /* -----------------------------------------------------------------
+   * Exposed Internals (Opened state) -- same password/tile mechanic as
+   * the Hacked tab, plus one always-available tile (Extract Stores).
+   * --------------------------------------------------------------- */
+  var INTERNALS_PASSWORDS = {
+    "bananaphone": { key: "transceiver", title: "Transceiver", body: "Attempt to extract the Transceiver.", used: false },
+    "defib": { key: "jumpstart", title: "JUMP START", body: "Briefly provide power to a system or setup a temporary shock trap.", used: false },
+    "bunker": { key: "shelter", title: "SHELTER", body: "Climb inside and seal yourself in.", used: false }
+  };
+  var internalsTiles = []; // { key, title, body, disabled }
+
+  function submitInternalsPassword(input){
+    var pw = input.value.trim().toLowerCase();
+    if(!pw) return;
+    var entry = INTERNALS_PASSWORDS[pw];
+    if(!entry || entry.used) return; // wrong, or already spent -- leave their input as typed
+    entry.used = true;
+    internalsTiles.push({ key: entry.key, title: entry.title, body: entry.body, disabled: false });
+    renderInternalsList();
+  }
+
+  // Take everything in stores, split as evenly as possible across the
+  // unit's currently-available flavours, log it as one entry in the
+  // Drinks tab, and empty the machine out.
+  function attemptExtractStores(){
+    if(machine.stores <= 0){
+      showResultToast("", "Nothing To Extract", "The stores are already empty.");
+      return;
+    }
+    var total = machine.stores;
+    var flavors = availableBeverages(machine.range);
+    var per = Math.floor(total / flavors.length);
+    var remainder = total % flavors.length;
+    var breakdown = flavors.map(function(b, i){
+      return b.name + " x" + (per + (i === 0 ? remainder : 0));
+    }).join(", ");
+
+    machine.stores = 0;
+    renderPad();
+    renderCoinSlot();
+    drinksDispensed.push({ name: "Extracted Stores", effect: breakdown });
+    updateSideTabCounts();
+    if(sidePanelMode === "drinks") renderDrinksList();
+
+    showResultToast("", "Stores Extracted", total + " cans taken.");
+  }
+
+  function useTransceiverTile(tile){
+    openStatCheckModal("Extract Transceiver", "Enter INTELLECT stat (+ skill bonuses)", false, function(result, stat){
+      tile.disabled = true; // one-shot regardless of outcome
+      if(result.success){
+        toolsCollected.push("Transceiver");
+        updateSideTabCounts(); // reveals the Tools tab if this is its first entry
+        showResultToast("dispense-toast--success", "Transceiver Extracted", "Rolled " + result.roll + " vs stat " + stat + ".");
+      } else {
+        var dmg = Math.floor(Math.random() * 6) + 1; // d6
+        machine.durability = Math.max(0, machine.durability - dmg);
+        renderStatusIndicators();
+        showResultToast("dispense-toast--failure", "Extraction Failed", "Rolled " + result.roll + " vs stat " + stat + ". Durability -" + dmg + ".");
+      }
+      renderInternalsList();
+    });
+  }
+
+  function useJumpStartTile(tile){
+    openStatCheckModal("Jump Start", "Enter INTELLECT stat (+ skill bonuses) — rolled with disadvantage", true, function(result, stat){
+      tile.disabled = true; // one-shot regardless of outcome
+      var rollsText = "Rolled " + result.rolls.join(" & ") + " (disadvantage, lowest kept) vs stat " + stat + ".";
+      if(result.success){
+        showResultToast("dispense-toast--success", "Capacitor Bank Shorted", rollsText + " Objective fulfilled.");
+      } else {
+        var dmg = Math.floor(Math.random() * 6) + 1; // d6 explosion damage
+        setMachineStatus("lockdown");
+        showResultToast("dispense-toast--failure", "Capacitor Bank Exploded", rollsText + " " + dmg + " explosion damage.");
+      }
+      // Durability is wrecked either way, success or failure.
+      machine.durability = 0;
+      renderStatusIndicators();
+      renderInternalsList();
+    });
+  }
+
+  function useShelterTile(tile){
+    if(!(machine.hacked && machine.durability >= 6)){
+      showResultToast("dispense-toast--failure", "Can't Shelter", "Requires the machine to be Hacked with 6+ durability.");
+      return;
+    }
+    machine.sheltered = true;
+    tile.disabled = true;
+    showResultToast("", "Sheltered", "You climb inside and seal yourself in.");
+    renderInternalsList();
+    if(sidePanelMode === "hacked") renderHackedList(); // shuts off the Terminal tile too
+  }
+
+  function internalsTileClickHandler(tile){
+    if(machine.sheltered || tile.disabled) return;
+    if(tile.key === "transceiver") useTransceiverTile(tile);
+    else if(tile.key === "jumpstart") useJumpStartTile(tile);
+    else if(tile.key === "shelter") useShelterTile(tile);
+  }
+
   function renderInternalsList(){
+    var extractDisabled = machine.sheltered;
+    var extractTileHtml = hackedTileHtml("Extract Stores", "Take all contents.", 'id="internalsExtractTile"', extractDisabled);
+
+    var tilesHtml = internalsTiles.map(function(t){
+      return hackedTileHtml(t.title, t.body, 'data-internals-key="'+t.key+'"', machine.sheltered || t.disabled);
+    }).join("");
+
     document.getElementById("sideList").innerHTML =
-      '<li class="side-list__empty" style="background:none;border:none;padding:0;">No actions available yet.</li>';
+      '<li class="hacked-password-row"><input type="text" class="hacked-password-input" id="internalsPasswordInput" placeholder="password…" autocomplete="off" aria-label="Password"></li>' +
+      extractTileHtml +
+      tilesHtml;
+
+    document.getElementById("internalsPasswordInput").addEventListener("keydown", function(e){
+      if(e.key === "Enter") submitInternalsPassword(this);
+    });
+    document.querySelectorAll("#sideList .hacked-tile").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        btn.classList.add("is-pressed");
+        window.setTimeout(function(){ btn.classList.remove("is-pressed"); }, 150);
+      });
+    });
+    var extractBtn = document.getElementById("internalsExtractTile");
+    if(extractBtn) extractBtn.addEventListener("click", attemptExtractStores);
+    document.querySelectorAll("#sideList .hacked-tile[data-internals-key]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var tile = internalsTiles.filter(function(t){ return t.key === btn.dataset.internalsKey; })[0];
+        if(tile) internalsTileClickHandler(tile);
+      });
+    });
   }
 
   // Same idea as the Hacked tab, but for the Opened state.
@@ -1758,7 +1961,10 @@
   document.getElementById("coinSlot").addEventListener("click", insertCoin);
   document.getElementById("coinLatch").addEventListener("click", pressLatch);
   document.getElementById("drinksTab").addEventListener("click", function(){ openSidePanel("drinks"); });
-  document.getElementById("toolsTab").addEventListener("click", function(){ openSidePanel("tools"); });
+  document.getElementById("toolsTab").addEventListener("click", function(){
+    if(machine.sheltered) return; // SHELTER disables the Tools action entirely
+    openSidePanel("tools");
+  });
   document.getElementById("hackedTab").addEventListener("click", function(){ openSidePanel("hacked"); });
   document.getElementById("internalsTab").addEventListener("click", function(){ openSidePanel("internals"); });
   document.getElementById("sideClose").addEventListener("click", function(){ setSidePanelOpen(false); });
@@ -1797,6 +2003,16 @@
   document.getElementById("crackInput").addEventListener("keydown", function(e){
     if(e.key === "Enter") submitCrackDamage();
     else if(e.key === "Escape") closeCrackModal();
+  });
+
+  document.getElementById("statCheckSubmit").addEventListener("click", submitStatCheck);
+  document.getElementById("statCheckCancel").addEventListener("click", closeStatCheckModal);
+  document.getElementById("statCheckInput").addEventListener("input", function(){
+    this.value = this.value.replace(/[^0-9]/g, "").slice(0, 2);
+  });
+  document.getElementById("statCheckInput").addEventListener("keydown", function(e){
+    if(e.key === "Enter") submitStatCheck();
+    else if(e.key === "Escape") closeStatCheckModal();
   });
 
   window.addEventListener("resize", syncOpeningBackdrop);
