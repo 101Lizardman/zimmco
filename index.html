@@ -1724,11 +1724,11 @@
     var maxDim = Math.max(size.x, size.y, size.z) || 1;
 
     // Dead-on offset, then orbited slightly off-centre for a less static
-    // starting shot: ~25° left, ~20° up from straight-on.
+    // starting shot: ~35° left, ~15° up from straight-on.
     var offset = new THREE.Vector3(0, size.y * 0.15, maxDim * 1.6);
     var spherical = new THREE.Spherical().setFromVector3(offset);
-    spherical.theta -= THREE.MathUtils.degToRad(25);
-    spherical.phi -= THREE.MathUtils.degToRad(20);
+    spherical.theta -= THREE.MathUtils.degToRad(35);
+    spherical.phi -= THREE.MathUtils.degToRad(15);
     spherical.makeSafe();
     offset.setFromSpherical(spherical);
 
@@ -2442,7 +2442,7 @@
   // 2s; in Lock Down they switch red and blink twice as fast (once/sec),
   // and each flash-on throws a little burst of sparks off the light.
   var STATUS_LIGHT_RED = 0xff2020;
-  var STATUS_LIGHT_SKYBLUE = 0x87ceeb;
+  var STATUS_LIGHT_SKYBLUE = 0x2f6f9e;
   var sparkWorldPos = new THREE.Vector3();
   function stepStatusLights(t){
     if(!statusLights.length) return;
