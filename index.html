@@ -2082,6 +2082,8 @@
   var lockdownLightWasOn = false; // edge-detect the alarm blink to time spark bursts
   var hackAttemptClicks = 0;
   var HACK_CLICKS_REQUIRED = 5; // clicks on the mainframeHack hotspot before it actually opens
+  var crackAttemptClicks = { crackOpenLeft: 0, crackOpenRight: 0 }; // independent per side
+  var CRACK_CLICKS_REQUIRED = 3; // clicks on either crack-open hotspot before the modal opens
 
   // Two async loads gate the loading screen: the cabinet model and the
   // can pre-warm below. Each calls this once it settles (success or
@@ -2822,10 +2824,15 @@
       point: new THREE.Vector3(-0.87900, 0.08032, -0.46648),
       radius: 0.45,
       action: function(){
-        if(window.ZCMachine){
-          window.ZCMachine.playThunk();
-          window.ZCMachine.openCrackModal();
+        var name = this.name;
+        crackAttemptClicks[name]++;
+        if(window.ZCMachine) window.ZCMachine.playThunk();
+        if(crackAttemptClicks[name] < CRACK_CLICKS_REQUIRED){
+          setHint("Striking the panel… (" + crackAttemptClicks[name] + "/" + CRACK_CLICKS_REQUIRED + ")");
+          return;
         }
+        crackAttemptClicks[name] = 0;
+        if(window.ZCMachine) window.ZCMachine.openCrackModal();
       }
     },
     {
@@ -2835,10 +2842,15 @@
       point: new THREE.Vector3(0.67327, 0.20904, -0.39255),
       radius: 0.45,
       action: function(){
-        if(window.ZCMachine){
-          window.ZCMachine.playThunk();
-          window.ZCMachine.openCrackModal();
+        var name = this.name;
+        crackAttemptClicks[name]++;
+        if(window.ZCMachine) window.ZCMachine.playThunk();
+        if(crackAttemptClicks[name] < CRACK_CLICKS_REQUIRED){
+          setHint("Striking the panel… (" + crackAttemptClicks[name] + "/" + CRACK_CLICKS_REQUIRED + ")");
+          return;
         }
+        crackAttemptClicks[name] = 0;
+        if(window.ZCMachine) window.ZCMachine.openCrackModal();
       }
     }
   ];
