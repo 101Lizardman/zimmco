@@ -619,7 +619,7 @@
 </style>
 
 <div class="loading-screen" id="loadingScreen">
-  <img class="loading-screen__logo" src="assets/banner-noBG.png" alt="ZimmCo Refreshment Beverages">
+  <img class="loading-screen__logo" id="loadingScreenLogo" src="assets/banner-noBG.png" alt="ZimmCo Refreshment Beverages">
 </div>
 
 <div class="hack-backdrop" id="hackBackdrop" hidden>
@@ -780,6 +780,20 @@
 (function(){
   "use strict";
 
+  // One value per page load, appended to every asset URL in this script
+  // so a fresh page load always fetches the current file instead of
+  // whatever the browser (or GitHub Pages' CDN) had cached under that
+  // same URL -- otherwise replacing e.g. an sfx file on disk doesn't
+  // show up until a hard refresh, since nothing about the URL itself
+  // ever changes. Defined first so the loading-screen logo below (the
+  // earliest asset load) gets it too.
+  var ASSET_CACHE_BUST = Date.now();
+  function bustCache(path){
+    return path + (path.indexOf("?") === -1 ? "?" : "&") + "v=" + ASSET_CACHE_BUST;
+  }
+  var loadingLogo = document.getElementById("loadingScreenLogo");
+  if(loadingLogo) loadingLogo.src = bustCache(loadingLogo.getAttribute("src"));
+
   // ---- loading screen: covers the first-paint/asset-load stutter (the
   // 3D module fetching+parsing vendingMachine.glb and pre-warming
   // tinyCan.glb) behind a spinning logo, up for at least 1s regardless of
@@ -848,7 +862,7 @@
 
   function playSfx(path){
     try{
-      var audio = new Audio(path);
+      var audio = new Audio(bustCache(path));
       audio.volume = 0.85;
       var p = audio.play();
       if(p && p.catch) p.catch(function(){ /* ignore — e.g. blocked before any user gesture */ });
@@ -1186,7 +1200,7 @@
   var VOICE_BASE = "audio/voices/";
   function playVoiceLine(id){
     try{
-      var audio = new Audio(VOICE_BASE + id + ".mp3");
+      var audio = new Audio(bustCache(VOICE_BASE + id + ".mp3"));
       audio.volume = 0.9;
       var p = audio.play();
       if(p && p.catch) p.catch(function(){ /* no voice line recorded for this flavour yet */ });
@@ -2280,6 +2294,14 @@
   var container = document.getElementById("view3d");
   var hint = document.getElementById("view3dHint");
   var scene, camera, renderer, controls, raycaster, pointer, model;
+  // One value per page load, appended to model URLs so replacing a .glb
+  // on disk always shows up on the next reload instead of getting stuck
+  // behind a cached copy of the old one -- see the matching bustCache()
+  // in the classic script (kept separate since it's a different scope).
+  var ASSET_CACHE_BUST = Date.now();
+  function bustCache(path){
+    return path + (path.indexOf("?") === -1 ? "?" : "&") + "v=" + ASSET_CACHE_BUST;
+  }
   var sceneHemiLight, sceneKeyLight, sceneRimLight; // scene-wide fill/key/rim -- washed red during Lock Down
   var statusLights = []; // { light, normalColor } for every light found in the model
   var MAX_SPARKS = 90; // lockdown alarm's spark system size; see createSparkSystem
@@ -2393,7 +2415,7 @@
 
     setHint("Loading assets/vendingMachine.glb…");
     new GLTFLoader().load(
-      "assets/vendingMachine.glb",
+      bustCache("assets/vendingMachine.glb"),
       function(gltf){
         model = gltf.scene;
         model.rotation.y = Math.PI; // the model faces backwards on load — turn it around
@@ -2570,7 +2592,7 @@
     if(canTemplateLoading){ window.setTimeout(function(){ loadCanTemplate(cb); }, 100); return; }
     canTemplateLoading = true;
     new GLTFLoader().load(
-      "assets/tinyCan.glb",
+      bustCache("assets/tinyCan.glb"),
       function(gltf){
         var raw = gltf.scene;
         var box = new THREE.Box3().setFromObject(raw);
@@ -3015,7 +3037,10 @@
         var self = this;
         if(!window.ZCMachine) return;
         window.ZCMachine.zapGate(function(){
-          hackAttemptClicks++;
+          // In Lock Down, every click already costs a ZAP save -- one
+          // click (after the save) is enough to trigger it, instead of
+          // also making you clear the full click gate on top of that.
+          hackAttemptClicks = window.ZCMachine.isLockdown() ? HACK_CLICKS_REQUIRED : hackAttemptClicks + 1;
           window.ZCMachine.playZzt();
           if(hackAttemptClicks < HACK_CLICKS_REQUIRED){
             spawnHackSparkBurst(self.point, 15); // small fizzle -- panel's not budging yet
@@ -3040,7 +3065,8 @@
         if(!window.ZCMachine) return;
         window.ZCMachine.zapGate(function(){
           var name = self.name;
-          crackAttemptClicks[name]++;
+          // Same one-click-suffices-in-Lock-Down rule as mainframeHack.
+          crackAttemptClicks[name] = window.ZCMachine.isLockdown() ? CRACK_CLICKS_REQUIRED : crackAttemptClicks[name] + 1;
           var pitch = 0.85 + Math.random() * 0.3;
           if(Math.random() < 0.5) window.ZCMachine.playThunk(pitch);
           else window.ZCMachine.playMetalCrunch(pitch);
@@ -3064,7 +3090,8 @@
         if(!window.ZCMachine) return;
         window.ZCMachine.zapGate(function(){
           var name = self.name;
-          crackAttemptClicks[name]++;
+          // Same one-click-suffices-in-Lock-Down rule as mainframeHack.
+          crackAttemptClicks[name] = window.ZCMachine.isLockdown() ? CRACK_CLICKS_REQUIRED : crackAttemptClicks[name] + 1;
           var pitch = 0.85 + Math.random() * 0.3;
           if(Math.random() < 0.5) window.ZCMachine.playThunk(pitch);
           else window.ZCMachine.playMetalCrunch(pitch);
