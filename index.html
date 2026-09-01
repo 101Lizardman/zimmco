@@ -689,7 +689,7 @@
   <div class="view3d__foot">
     <p class="view3d__hint" id="view3dHint">Click the coin slot to vend</p>
     <p class="view3d__credits">
-      For use with <a href="https://shanevincent.itch.io/zimmco-refreshment-beverages" target="_blank" rel="noopener">ZimmCo Refreshment Beverages</a> · Vending machine model by <a href="https://sketchfab.com/3d-models/kiosk-machine-retro-horror-vending-automat-300c0c705eea4c0f9d510021c847646f" target="_blank" rel="noopener">ZwiebelGames</a> · SFX by <a href="https://pixabay.com/sound-effects/film-special-effects-vending-machine-action-61196/" target="_blank" rel="noopener">Kyodon</a>
+      For use with <a href="https://shanevincent.itch.io/zimmco-refreshment-beverages" target="_blank" rel="noopener">ZimmCo Refreshment Beverages</a> · Vending machine model by <a href="https://sketchfab.com/3d-models/kiosk-machine-retro-horror-vending-automat-300c0c705eea4c0f9d510021c847646f" target="_blank" rel="noopener">ZwiebelGames</a> · SFX by <a href="https://pixabay.com/sound-effects/film-special-effects-vending-machine-action-61196/" target="_blank" rel="noopener">Kyodon</a> · VA by Blair Sist
     </p>
   </div>
 </div>
@@ -877,6 +877,40 @@
     var n = Math.floor(Math.random() * VOX_COUNT) + 1;
     playSfx("assets/sfx/vox-" + n + ".mp3", 0.25);
   }
+
+  // Browsers block audio.play() until the page has seen a genuine user
+  // gesture (click/tap/key) — the model-load vox line used to fire blind
+  // on a timer and get silently swallowed by that block most of the time
+  // (playSfx's catch() above exists specifically for this). Route it
+  // through here instead: play immediately if a gesture has already
+  // happened, otherwise queue it for the moment the first one does.
+  var hasUserGestured = false;
+  var pendingAfterGesture = [];
+  function onFirstGesture(){
+    if(hasUserGestured) return;
+    hasUserGestured = true;
+    document.removeEventListener("pointerdown", onFirstGesture);
+    document.removeEventListener("keydown", onFirstGesture);
+    var queued = pendingAfterGesture;
+    pendingAfterGesture = [];
+    queued.forEach(function(fn){ fn(); });
+  }
+  document.addEventListener("pointerdown", onFirstGesture);
+  document.addEventListener("keydown", onFirstGesture);
+  function playVoxWhenReady(){
+    if(hasUserGestured) playVox();
+    else pendingAfterGesture.push(playVox);
+  }
+
+  // Ambient vox: a random line roughly every 10 minutes for as long as
+  // the page stays open. Started once, right after the model-load vox.
+  var VOX_AMBIENT_INTERVAL_MS = 10 * 60 * 1000;
+  var ambientVoxTimer = null;
+  function startAmbientVox(){
+    if(ambientVoxTimer) return;
+    ambientVoxTimer = window.setInterval(playVoxWhenReady, VOX_AMBIENT_INTERVAL_MS);
+  }
+
   function playAlarm(){ playSfx("assets/sfx/alarm.mp3"); }
 
   // Lock Down alarm: fires immediately on entering lockdown, then every
@@ -2256,7 +2290,7 @@
 
   // Small handoff point for the separate 3D-view module script (view3d.js)
   // — it can't reach into this IIFE's closure directly.
-  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: machineStatusLabel, isLockdown: function(){ return machine.lockdown; }, isHacked: function(){ return machine.hacked; }, isOpened: function(){ return machine.opened; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal, openCrackModal: openCrackModal, playThunk: playThunk, playMetalCrunch: playMetalCrunch, playMetalBend: playMetalBend, zapGate: zapGate, isProximityWired: function(){ return machine.proximityWired; }, openProximitySensorModal: openProximitySensorModal, playVox: playVox };
+  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: machineStatusLabel, isLockdown: function(){ return machine.lockdown; }, isHacked: function(){ return machine.hacked; }, isOpened: function(){ return machine.opened; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal, openCrackModal: openCrackModal, playThunk: playThunk, playMetalCrunch: playMetalCrunch, playMetalBend: playMetalBend, zapGate: zapGate, isProximityWired: function(){ return machine.proximityWired; }, openProximitySensorModal: openProximitySensorModal, playVox: playVox, playVoxWhenReady: playVoxWhenReady, startAmbientVox: startAmbientVox };
 
   // 3D is the default view, no on-page control for it. `?classic` in the
   // URL is a dev-only escape hatch back to the DOM/CSS machine (e.g. for
@@ -2454,7 +2488,10 @@
         });
         setHint("Drag to orbit · scroll to zoom · click the coin slot to vend");
         window.setTimeout(function(){
-          if(window.ZCMachine) window.ZCMachine.playVox();
+          if(window.ZCMachine){
+            window.ZCMachine.playVoxWhenReady();
+            window.ZCMachine.startAmbientVox();
+          }
         }, 1000);
         assetLoadSettled();
       },
