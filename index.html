@@ -669,6 +669,10 @@
     <button type="button" class="admin-panel__btn" data-status="hacked">Hacked</button>
     <button type="button" class="admin-panel__btn" data-status="lockdown">Lock Down</button>
   </div>
+  <div class="admin-panel__title" style="margin-top:10px;">Force Rarity</div>
+  <div class="admin-panel__states" id="adminRarity">
+    <button type="button" class="admin-panel__btn" data-rarity="rare">Iskra (Rare) ✨</button>
+  </div>
 </div>
 
 <button type="button" class="sound-fab" id="soundFab" aria-pressed="true" aria-label="Mute sound effects" title="Mute sound effects">
@@ -1385,6 +1389,17 @@
     updateHackedTabVisibility();
     updateInternalsTabVisibility();
     updateAlarmLoop();
+  }
+
+  // Admin-only: force the current unit's range to Iskra (Rare) without a
+  // full reroll -- same range a real newMachine() roll would only rarely
+  // land on (see rollRange above). Only ever un-set by rolling a brand
+  // new unit. Drives the whole-machine sparkle effect in the 3D view.
+  function forceRare(){
+    machine.range = "rare";
+    machine.rangeLabel = "Iskra (Rare)";
+    renderPad();
+    renderCoinSlot();
   }
 
   /* -----------------------------------------------------------------
@@ -2290,7 +2305,7 @@
 
   // Small handoff point for the separate 3D-view module script (view3d.js)
   // — it can't reach into this IIFE's closure directly.
-  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: machineStatusLabel, isLockdown: function(){ return machine.lockdown; }, isHacked: function(){ return machine.hacked; }, isOpened: function(){ return machine.opened; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal, openCrackModal: openCrackModal, playThunk: playThunk, playMetalCrunch: playMetalCrunch, playMetalBend: playMetalBend, zapGate: zapGate, isProximityWired: function(){ return machine.proximityWired; }, openProximitySensorModal: openProximitySensorModal, playVox: playVox, playVoxWhenReady: playVoxWhenReady, startAmbientVox: startAmbientVox };
+  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: machineStatusLabel, isLockdown: function(){ return machine.lockdown; }, isHacked: function(){ return machine.hacked; }, isOpened: function(){ return machine.opened; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal, openCrackModal: openCrackModal, playThunk: playThunk, playMetalCrunch: playMetalCrunch, playMetalBend: playMetalBend, zapGate: zapGate, isProximityWired: function(){ return machine.proximityWired; }, openProximitySensorModal: openProximitySensorModal, playVox: playVox, playVoxWhenReady: playVoxWhenReady, startAmbientVox: startAmbientVox, isRare: function(){ return machine.range === "rare"; }, forceRare: forceRare };
 
   // 3D is the default view, no on-page control for it. `?classic` in the
   // URL is a dev-only escape hatch back to the DOM/CSS machine (e.g. for
@@ -2480,6 +2495,7 @@
         scene.add(model);
         frameModel(model);
         worldFloorY = new THREE.Box3().setFromObject(model).min.y;
+        initIskraSparkles(model);
         model.traverse(function(o){
           if(o.isLight){
             o.intensity *= 0.25; // reduced 75% from whatever was authored in Blender
@@ -3064,6 +3080,9 @@
     document.querySelectorAll("#adminStates .admin-panel__btn").forEach(function(btn){
       btn.classList.toggle("is-active", !!activeMap[btn.dataset.status]);
     });
+    document.querySelectorAll("#adminRarity .admin-panel__btn").forEach(function(btn){
+      btn.classList.toggle("is-active", btn.dataset.rarity === "rare" && window.ZCMachine.isRare());
+    });
   }
 
   function initAdmin(){
@@ -3078,6 +3097,12 @@
       var btn = e.target.closest(".admin-panel__btn");
       if(!btn || !window.ZCMachine) return;
       window.ZCMachine.setStatus(btn.dataset.status);
+      refreshAdminStateButtons();
+    });
+    document.getElementById("adminRarity").addEventListener("click", function(e){
+      var btn = e.target.closest(".admin-panel__btn");
+      if(!btn || !window.ZCMachine || btn.dataset.rarity !== "rare") return;
+      window.ZCMachine.forceRare();
       refreshAdminStateButtons();
     });
     refreshAdminStateButtons();
@@ -3443,6 +3468,124 @@
     hackSparkSys.step(dt);
   }
 
+  /* ---------------------------------------------------------------------
+   * Iskra (Rare) sparkle: when the current unit's range is Rare, a cloud
+   * of big, chunky, twinkling points drifts in the space around the
+   * whole cabinet (not hugging its surface -- a wide halo, padded well
+   * past the model's bounding box on every side). Built once, right
+   * after the model loads; visibility just tracks window.ZCMachine.isRare()
+   * every frame, so forcing/un-forcing it from the admin panel or rolling
+   * a new unit picks it up immediately with no rebuild needed.
+   * ------------------------------------------------------------------- */
+  var ISKRA_SPARKLE_COUNT = 140;
+  var ISKRA_SPARKLE_MARGIN = 0.45; // metres of extra space padded around the cabinet's bounding box
+  var ISKRA_SPARKLE_COLORS = [
+    new THREE.Color(0xffffff), // white-hot glint
+    new THREE.Color(0xffe9a8), // pale gold
+    new THREE.Color(0xd9c4ff)  // soft violet -- "tantalizes your psyche"
+  ];
+  var iskraSparkleSys = null;
+
+  function initIskraSparkles(model){
+    var box = new THREE.Box3().setFromObject(model);
+    var size = box.getSize(new THREE.Vector3());
+    var center = box.getCenter(new THREE.Vector3());
+    var padded = new THREE.Vector3(
+      size.x + ISKRA_SPARKLE_MARGIN * 2,
+      size.y + ISKRA_SPARKLE_MARGIN * 2,
+      size.z + ISKRA_SPARKLE_MARGIN * 2
+    );
+
+    var positions = new Float32Array(ISKRA_SPARKLE_COUNT * 3);
+    var colors = new Float32Array(ISKRA_SPARKLE_COUNT * 3);
+    var basePositions = [];
+    var driftDirs = [];
+    var driftAmps = new Float32Array(ISKRA_SPARKLE_COUNT);
+    var driftFreqs = new Float32Array(ISKRA_SPARKLE_COUNT);
+    var driftPhases = new Float32Array(ISKRA_SPARKLE_COUNT);
+    var phases = new Float32Array(ISKRA_SPARKLE_COUNT);
+    var freqs = new Float32Array(ISKRA_SPARKLE_COUNT);
+    var baseColors = [];
+
+    for(var i = 0; i < ISKRA_SPARKLE_COUNT; i++){
+      // Anchor point anywhere in the padded volume around the cabinet
+      // (not just its surface) -- a loose halo rather than a tight shell.
+      var bp = new THREE.Vector3(
+        center.x + (Math.random() - 0.5) * padded.x,
+        center.y + (Math.random() - 0.5) * padded.y,
+        center.z + (Math.random() - 0.5) * padded.z
+      );
+      basePositions.push(bp);
+      positions[i*3] = bp.x; positions[i*3+1] = bp.y; positions[i*3+2] = bp.z;
+
+      // Slow wandering drift: each particle eases back and forth along
+      // its own random axis, so the whole cloud looks like it's loosely
+      // floating rather than twinkling in fixed place.
+      var dd = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+      driftDirs.push(dd);
+      driftAmps[i] = 0.1 + Math.random() * 0.18;
+      driftFreqs[i] = 0.15 + Math.random() * 0.35; // radians/sec -- slow
+      driftPhases[i] = Math.random() * Math.PI * 2;
+
+      var c = ISKRA_SPARKLE_COLORS[Math.floor(Math.random() * ISKRA_SPARKLE_COLORS.length)];
+      baseColors.push(c);
+      colors[i*3] = c.r; colors[i*3+1] = c.g; colors[i*3+2] = c.b;
+      phases[i] = Math.random() * Math.PI * 2;
+      freqs[i] = 1.5 + Math.random() * 2.5; // per-particle twinkle rate, radians/sec
+    }
+
+    var geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geom.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    // No sprite texture + a large size -> flat squares, not soft circles:
+    // big, thick, pixellated glints (same trick the hack-hotspot sparks
+    // use), not a fine smooth glitter.
+    var mat = new THREE.PointsMaterial({
+      size: 0.06,
+      sizeAttenuation: true,
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    var points = new THREE.Points(geom, mat);
+    points.frustumCulled = false;
+    points.visible = false;
+    scene.add(points);
+
+    iskraSparkleSys = {
+      points: points, phases: phases, freqs: freqs, baseColors: baseColors,
+      basePositions: basePositions, driftDirs: driftDirs, driftAmps: driftAmps,
+      driftFreqs: driftFreqs, driftPhases: driftPhases
+    };
+  }
+
+  function stepIskraSparkles(t){
+    if(!iskraSparkleSys) return;
+    var isRare = !!(window.ZCMachine && window.ZCMachine.isRare && window.ZCMachine.isRare());
+    iskraSparkleSys.points.visible = isRare;
+    if(!isRare) return;
+    var posAttr = iskraSparkleSys.points.geometry.attributes.position;
+    var colAttr = iskraSparkleSys.points.geometry.attributes.color;
+    var tSec = t / 1000;
+    for(var i = 0; i < ISKRA_SPARKLE_COUNT; i++){
+      var bp = iskraSparkleSys.basePositions[i];
+      var dd = iskraSparkleSys.driftDirs[i];
+      var offset = Math.sin(tSec * iskraSparkleSys.driftFreqs[i] + iskraSparkleSys.driftPhases[i]) * iskraSparkleSys.driftAmps[i];
+      posAttr.setXYZ(i, bp.x + dd.x * offset, bp.y + dd.y * offset, bp.z + dd.z * offset);
+
+      // Sharpened sine (pow 6) -- long dark stretches with a quick bright
+      // glint, rather than a smooth slow pulse. Each particle's own
+      // phase/freq keeps the whole cloud from twinkling in unison.
+      var twinkle = Math.pow(Math.max(0, Math.sin(tSec * iskraSparkleSys.freqs[i] + iskraSparkleSys.phases[i])), 6);
+      var brightness = 0.08 + 0.92 * twinkle;
+      var c = iskraSparkleSys.baseColors[i];
+      colAttr.setXYZ(i, c.r * brightness, c.g * brightness, c.b * brightness);
+    }
+    posAttr.needsUpdate = true;
+    colAttr.needsUpdate = true;
+  }
+
   // Status light(s) on the model: normal colour, blinking on/off every
   // 2s; in Lock Down they switch red and blink twice as fast (once/sec),
   // and each flash-on throws a little burst of sparks off the light.
@@ -3490,6 +3633,7 @@
     stepStatusLights(t);
     stepSceneLighting();
     stepSparks(dt);
+    stepIskraSparkles(t);
     controls.update();
     renderer.render(scene, camera);
   }
@@ -3504,7 +3648,7 @@
     spawnCans: function(n){ for(var i=0; i<n; i++) spawnCan3D(); },
     // exposes scene internals for hotspot calibration in the console —
     // e.g. window.ZC3D.debug().camera
-    debug: function(){ return { scene: scene, camera: camera, renderer: renderer, raycaster: raycaster, controls: controls, model: model, HOTSPOTS: HOTSPOTS, cans3D: cans3D, spawnCan3D: spawnCan3D, TRAY_SPAWN_CENTER: TRAY_SPAWN_CENTER, TRAY_FLOOR_PLANE: TRAY_FLOOR_PLANE, TRAY_WALLS: TRAY_WALLS, canRadius: canRadius, statusLights: statusLights, sparks: lockdownSparkSys.list, hackSparks: hackSparkSys.list, spawnSparkBurst: spawnSparkBurst, spawnHackSparkBurst: spawnHackSparkBurst, worldFloorY: worldFloorY }; }
+    debug: function(){ return { scene: scene, camera: camera, renderer: renderer, raycaster: raycaster, controls: controls, model: model, HOTSPOTS: HOTSPOTS, cans3D: cans3D, spawnCan3D: spawnCan3D, TRAY_SPAWN_CENTER: TRAY_SPAWN_CENTER, TRAY_FLOOR_PLANE: TRAY_FLOOR_PLANE, TRAY_WALLS: TRAY_WALLS, canRadius: canRadius, statusLights: statusLights, sparks: lockdownSparkSys.list, hackSparks: hackSparkSys.list, spawnSparkBurst: spawnSparkBurst, spawnHackSparkBurst: spawnHackSparkBurst, worldFloorY: worldFloorY, iskraSparkleSys: iskraSparkleSys }; }
   };
 
   // This module script always runs after the classic script (module
