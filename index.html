@@ -1023,17 +1023,19 @@
 
   // Heavy impact for striking the side panels (crack-it-open hotspots):
   // a deep falling sine for the body, plus a short burst of lowpassed
-  // noise for the transient "thock" of the hit.
-  function playThunk(){
+  // noise for the transient "thock" of the hit. pitch (default 1)
+  // scales every frequency, for a little variation click to click.
+  function playThunk(pitch){
     if(!soundEnabled) return;
     var ctx = ensureAudioCtx();
     if(!ctx) return;
+    pitch = pitch || 1;
     var now = ctx.currentTime;
 
     var osc = ctx.createOscillator();
     osc.type = "sine";
-    osc.frequency.setValueAtTime(150, now);
-    osc.frequency.exponentialRampToValueAtTime(45, now + 0.15);
+    osc.frequency.setValueAtTime(150 * pitch, now);
+    osc.frequency.exponentialRampToValueAtTime(45 * pitch, now + 0.15);
     var gain = ctx.createGain();
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.exponentialRampToValueAtTime(0.6, now + 0.008);
@@ -1054,9 +1056,56 @@
     src.buffer = buffer;
     var filter = ctx.createBiquadFilter();
     filter.type = "lowpass";
-    filter.frequency.setValueAtTime(500, now);
+    filter.frequency.setValueAtTime(500 * pitch, now);
     var nGain = ctx.createGain();
     nGain.gain.setValueAtTime(0.5, now);
+    nGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    src.connect(filter).connect(nGain).connect(ctx.destination);
+    src.start(now);
+    src.stop(now + dur + 0.01);
+  }
+
+  // Metallic crunch -- a harsher alternative to Thunk, randomly swapped in
+  // on the crack-open hotspots: a couple of short, detuned, ringing square
+  // waves (the metallic "clang" character) layered under a coarser burst
+  // of noise than Thunk's. Same pitch-scaling convention.
+  function playMetalCrunch(pitch){
+    if(!soundEnabled) return;
+    var ctx = ensureAudioCtx();
+    if(!ctx) return;
+    pitch = pitch || 1;
+    var now = ctx.currentTime;
+
+    [520, 730].forEach(function(freq, i){
+      var osc = ctx.createOscillator();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(freq * pitch, now);
+      osc.frequency.exponentialRampToValueAtTime(freq * pitch * 0.6, now + 0.12);
+      var gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(i === 0 ? 0.22 : 0.14, now + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.18);
+    });
+
+    var dur = 0.09;
+    var bufSize = Math.max(1, Math.round(ctx.sampleRate * dur));
+    var buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+    var data = buffer.getChannelData(0);
+    for(var i = 0; i < bufSize; i++){
+      var decay = 1 - (i / bufSize);
+      data[i] = (Math.random() * 2 - 1) * decay * decay;
+    }
+    var src = ctx.createBufferSource();
+    src.buffer = buffer;
+    var filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(1400 * pitch, now);
+    filter.Q.setValueAtTime(1.2, now);
+    var nGain = ctx.createGain();
+    nGain.gain.setValueAtTime(0.45, now);
     nGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
     src.connect(filter).connect(nGain).connect(ctx.destination);
     src.start(now);
@@ -2109,7 +2158,7 @@
 
   // Small handoff point for the separate 3D-view module script (view3d.js)
   // — it can't reach into this IIFE's closure directly.
-  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: machineStatusLabel, isLockdown: function(){ return machine.lockdown; }, isHacked: function(){ return machine.hacked; }, isOpened: function(){ return machine.opened; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal, openCrackModal: openCrackModal, playThunk: playThunk, zapGate: zapGate };
+  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: machineStatusLabel, isLockdown: function(){ return machine.lockdown; }, isHacked: function(){ return machine.hacked; }, isOpened: function(){ return machine.opened; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal, openCrackModal: openCrackModal, playThunk: playThunk, playMetalCrunch: playMetalCrunch, zapGate: zapGate };
 
   // 3D is the default view, no on-page control for it. `?classic` in the
   // URL is a dev-only escape hatch back to the DOM/CSS machine (e.g. for
@@ -2173,7 +2222,7 @@
   var hackAttemptClicks = 0;
   var HACK_CLICKS_REQUIRED = 5; // clicks on the mainframeHack hotspot before it actually opens
   var crackAttemptClicks = { crackOpenLeft: 0, crackOpenRight: 0 }; // independent per side
-  var CRACK_CLICKS_REQUIRED = 3; // clicks on either crack-open hotspot before the modal opens
+  var CRACK_CLICKS_REQUIRED = 10; // clicks on either crack-open hotspot before the modal opens
 
   // Two async loads gate the loading screen: the cabinet model and the
   // can pre-warm below. Each calls this once it settles (success or
@@ -2925,7 +2974,9 @@
         window.ZCMachine.zapGate(function(){
           var name = self.name;
           crackAttemptClicks[name]++;
-          window.ZCMachine.playThunk();
+          var pitch = 0.85 + Math.random() * 0.3;
+          if(Math.random() < 0.5) window.ZCMachine.playThunk(pitch);
+          else window.ZCMachine.playMetalCrunch(pitch);
           if(crackAttemptClicks[name] < CRACK_CLICKS_REQUIRED){
             setHint("Striking the panel… (" + crackAttemptClicks[name] + "/" + CRACK_CLICKS_REQUIRED + ")");
             return;
@@ -2947,7 +2998,9 @@
         window.ZCMachine.zapGate(function(){
           var name = self.name;
           crackAttemptClicks[name]++;
-          window.ZCMachine.playThunk();
+          var pitch = 0.85 + Math.random() * 0.3;
+          if(Math.random() < 0.5) window.ZCMachine.playThunk(pitch);
+          else window.ZCMachine.playMetalCrunch(pitch);
           if(crackAttemptClicks[name] < CRACK_CLICKS_REQUIRED){
             setHint("Striking the panel… (" + crackAttemptClicks[name] + "/" + CRACK_CLICKS_REQUIRED + ")");
             return;
