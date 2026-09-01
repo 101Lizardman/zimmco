@@ -1805,6 +1805,11 @@
     updateSideTabCounts();
     if(sidePanelMode === "drinks") renderDrinksList();
 
+    // Dump every extracted can onto the floor at once, capped at 100 --
+    // funnier than a single toast, and the 3D side already trims down to
+    // CAN_MAX_ALIVE on its own if this pushes it over.
+    if(window.ZC3D && window.ZC3D.spawnCans) window.ZC3D.spawnCans(Math.min(total, 100));
+
     showResultToast("", "Stores Extracted", total + " cans taken.");
   }
 
@@ -3455,6 +3460,11 @@
   window.ZC3D = {
     init: init,
     resize: onResize,
+    spawnCan: spawnCan3D,
+    // Spawns N cans at once (e.g. Extract Stores dumping everything on
+    // the floor at once) -- each spawnCan3D() call is its own trim check
+    // against CAN_MAX_ALIVE, so this never needs its own cap logic.
+    spawnCans: function(n){ for(var i=0; i<n; i++) spawnCan3D(); },
     // exposes scene internals for hotspot calibration in the console —
     // e.g. window.ZC3D.debug().camera
     debug: function(){ return { scene: scene, camera: camera, renderer: renderer, raycaster: raycaster, controls: controls, model: model, HOTSPOTS: HOTSPOTS, cans3D: cans3D, spawnCan3D: spawnCan3D, TRAY_SPAWN_CENTER: TRAY_SPAWN_CENTER, TRAY_FLOOR_PLANE: TRAY_FLOOR_PLANE, TRAY_WALLS: TRAY_WALLS, canRadius: canRadius, statusLights: statusLights, sparks: lockdownSparkSys.list, hackSparks: hackSparkSys.list, spawnSparkBurst: spawnSparkBurst, spawnHackSparkBurst: spawnHackSparkBurst, worldFloorY: worldFloorY }; }
