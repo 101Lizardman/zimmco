@@ -859,10 +859,10 @@
     return audioCtx;
   }
 
-  function playSfx(path){
+  function playSfx(path, volume){
     try{
       var audio = new Audio(bustCache(path));
-      audio.volume = 0.85;
+      audio.volume = volume === undefined ? 0.85 : volume;
       var p = audio.play();
       if(p && p.catch) p.catch(function(){ /* ignore — e.g. blocked before any user gesture */ });
     }catch(e){ /* ignore */ }
@@ -870,6 +870,13 @@
   function playCoinDrop(){ playSfx("assets/sfx/coinDrop.mp3"); }
   function playCanDrop(){ playSfx("assets/sfx/canDrop.mp3"); }
   function playHum(){ playSfx("assets/sfx/hum.mp3"); }
+
+  var VOX_COUNT = 6; // assets/sfx/vox-1.mp3 .. vox-6.mp3
+  function playVox(){
+    if(!soundEnabled) return;
+    var n = Math.floor(Math.random() * VOX_COUNT) + 1;
+    playSfx("assets/sfx/vox-" + n + ".mp3", 0.25);
+  }
   function playAlarm(){ playSfx("assets/sfx/alarm.mp3"); }
 
   // Lock Down alarm: fires immediately on entering lockdown, then every
@@ -1984,7 +1991,11 @@
       renderPad();
       updateInternalsStats();
       addDispensedDrink(bev);
-      if(soundEnabled){ playCanDrop(); playVoiceLine(bev.id); }
+      if(soundEnabled){
+        playCanDrop();
+        playVoiceLine(bev.id);
+        if(Math.random() < 0.25) playVox(); // 1 in 4 chance of a vox line on vend
+      }
       if(onDone) onDone(bev);
     }, 1500);
   }
@@ -2166,7 +2177,11 @@
     renderCoinSlot();
     updateInternalsStats();
     addDispensedDrink(bev);
-    if(soundEnabled){ playCanDrop(); playVoiceLine(bev.id); }
+    if(soundEnabled){
+      playCanDrop();
+      playVoiceLine(bev.id);
+      if(Math.random() < 0.25) playVox(); // 1 in 4 chance of a vox line on vend
+    }
   }
 
   // ---- wire up ----
@@ -2236,7 +2251,7 @@
 
   // Small handoff point for the separate 3D-view module script (view3d.js)
   // — it can't reach into this IIFE's closure directly.
-  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: machineStatusLabel, isLockdown: function(){ return machine.lockdown; }, isHacked: function(){ return machine.hacked; }, isOpened: function(){ return machine.opened; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal, openCrackModal: openCrackModal, playThunk: playThunk, playMetalCrunch: playMetalCrunch, playMetalBend: playMetalBend, zapGate: zapGate, isProximityWired: function(){ return machine.proximityWired; }, openProximitySensorModal: openProximitySensorModal };
+  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: machineStatusLabel, isLockdown: function(){ return machine.lockdown; }, isHacked: function(){ return machine.hacked; }, isOpened: function(){ return machine.opened; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal, openCrackModal: openCrackModal, playThunk: playThunk, playMetalCrunch: playMetalCrunch, playMetalBend: playMetalBend, zapGate: zapGate, isProximityWired: function(){ return machine.proximityWired; }, openProximitySensorModal: openProximitySensorModal, playVox: playVox };
 
   // 3D is the default view, no on-page control for it. `?classic` in the
   // URL is a dev-only escape hatch back to the DOM/CSS machine (e.g. for
@@ -2425,6 +2440,7 @@
         model.rotation.y = Math.PI; // the model faces backwards on load — turn it around
         scene.add(model);
         frameModel(model);
+        worldFloorY = new THREE.Box3().setFromObject(model).min.y;
         model.traverse(function(o){
           if(o.isLight){
             o.intensity *= 0.25; // reduced 75% from whatever was authored in Blender
@@ -2432,6 +2448,9 @@
           }
         });
         setHint("Drag to orbit · scroll to zoom · click the coin slot to vend");
+        window.setTimeout(function(){
+          if(window.ZCMachine) window.ZCMachine.playVox();
+        }, 1000);
         assetLoadSettled();
       },
       undefined,
@@ -2586,6 +2605,12 @@
   // no longer real physical walls in its path and should stop applying.
   var TRAY_WALL_MIN_Y = Math.min.apply(null, TRAY_FLOOR_RAW.map(function(p){ return p.y; })) - 0.1;
 
+  // Invisible collision floor at the base of the cabinet -- measured off
+  // the model's own bounding box once it loads (see the GLTFLoader
+  // callback below) -- so a vended can that falls clear of the tray
+  // comes to rest on the ground instead of falling forever.
+  var worldFloorY = null;
+
   var canTemplate = null;
   var canTemplateLoading = false;
   var canRadius = 0.05; // overwritten with a real measurement once the model loads
@@ -2723,6 +2748,19 @@
             var wvn = b.vel.dot(wall.normal);
             if(wvn < 0) b.vel.addScaledVector(wall.normal, -wvn);
           }
+        }
+      }
+
+      // World floor: once clear of the tray, the can settles here
+      // instead of falling forever -- an inelastic landing (no bounce),
+      // with some friction on the way to a stop.
+      if(worldFloorY !== null){
+        var floorSurface = worldFloorY + canRadius;
+        if(b.pos.y <= floorSurface){
+          b.pos.y = floorSurface;
+          if(b.vel.y < 0) b.vel.y = 0;
+          b.vel.x *= 0.85;
+          b.vel.z *= 0.85;
         }
       }
 
@@ -3367,7 +3405,7 @@
     resize: onResize,
     // exposes scene internals for hotspot calibration in the console —
     // e.g. window.ZC3D.debug().camera
-    debug: function(){ return { scene: scene, camera: camera, renderer: renderer, raycaster: raycaster, controls: controls, model: model, HOTSPOTS: HOTSPOTS, cans3D: cans3D, spawnCan3D: spawnCan3D, TRAY_SPAWN_CENTER: TRAY_SPAWN_CENTER, TRAY_FLOOR_PLANE: TRAY_FLOOR_PLANE, TRAY_WALLS: TRAY_WALLS, canRadius: canRadius, statusLights: statusLights, sparks: lockdownSparkSys.list, hackSparks: hackSparkSys.list, spawnSparkBurst: spawnSparkBurst, spawnHackSparkBurst: spawnHackSparkBurst }; }
+    debug: function(){ return { scene: scene, camera: camera, renderer: renderer, raycaster: raycaster, controls: controls, model: model, HOTSPOTS: HOTSPOTS, cans3D: cans3D, spawnCan3D: spawnCan3D, TRAY_SPAWN_CENTER: TRAY_SPAWN_CENTER, TRAY_FLOOR_PLANE: TRAY_FLOOR_PLANE, TRAY_WALLS: TRAY_WALLS, canRadius: canRadius, statusLights: statusLights, sparks: lockdownSparkSys.list, hackSparks: hackSparkSys.list, spawnSparkBurst: spawnSparkBurst, spawnHackSparkBurst: spawnHackSparkBurst, worldFloorY: worldFloorY }; }
   };
 
   // This module script always runs after the classic script (module
