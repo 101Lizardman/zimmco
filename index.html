@@ -2544,6 +2544,7 @@
   var CAN_TARGET_HEIGHT = 0.244; // 2x a real 12oz can's height (0.122m), in metres
   var CAN_GRAVITY = 6;
   var CAN_RESTITUTION = 0.3; // lower = heavier landing, less bouncy
+  var CAN_MAX_ALIVE = 100; // oldest cans get trimmed once the floor holds more than this
 
   function v3(p){ return new THREE.Vector3(p.x, p.y, p.z); }
   function centroidOf(points){
@@ -2693,7 +2694,15 @@
         bounced: false
       });
 
-      window.setTimeout(function(){ removeCan3D(inst); }, 6000);
+      // No per-can timer: cans stick around and pile up on the floor.
+      // Once there are more than CAN_MAX_ALIVE, trim the oldest ones back
+      // down to that cap instead.
+      if(cans3D.length > CAN_MAX_ALIVE){
+        var toRemove = cans3D.splice(0, cans3D.length - CAN_MAX_ALIVE);
+        for(var r=0; r<toRemove.length; r++){
+          if(toRemove[r].obj.parent) toRemove[r].obj.parent.remove(toRemove[r].obj);
+        }
+      }
     });
   }
 
@@ -2752,20 +2761,63 @@
       }
 
       // World floor: once clear of the tray, the can settles here
-      // instead of falling forever -- an inelastic landing (no bounce),
-      // with some friction on the way to a stop.
+      // instead of falling forever -- an inelastic landing (no bounce).
+      // While grounded: real per-frame friction (not a one-off slap) on
+      // both the horizontal slide AND the vertical spin -- previously
+      // angVelY was only ever halved once, at the tray bounce, so a can
+      // that landed still spinning just kept spinning forever. Also eases
+      // the tip angle toward the nearest clean rest pose (flat upright at
+      // 0°, or flat on its side at 90°) instead of freezing wherever the
+      // topple's damped coast happened to run out.
       if(worldFloorY !== null){
         var floorSurface = worldFloorY + canRadius;
         if(b.pos.y <= floorSurface){
           b.pos.y = floorSurface;
           if(b.vel.y < 0) b.vel.y = 0;
-          b.vel.x *= 0.85;
-          b.vel.z *= 0.85;
+          var groundFriction = Math.max(0, 1 - 4 * dt);
+          b.vel.x *= groundFriction;
+          b.vel.z *= groundFriction;
+          b.angVelY *= groundFriction;
+
+          var tiltMag = Math.hypot(b.tipX, b.tipZ);
+          if(tiltMag > 1e-4){
+            var tiltTarget = tiltMag < Math.PI / 4 ? 0 : Math.PI / 2;
+            var newTiltMag = tiltMag + (tiltTarget - tiltMag) * Math.min(1, 6 * dt);
+            var tiltScale = newTiltMag / tiltMag;
+            b.tipX *= tiltScale;
+            b.tipZ *= tiltScale;
+          }
         }
       }
 
       b.obj.position.copy(b.pos);
       b.obj.rotation.set(b.tipX, b.rotY, b.tipZ);
+    }
+
+    // Can-vs-can: simple sphere-sphere push-apart so multiple cans on the
+    // floor at once don't clip through each other. A second, separate
+    // pass (needs everyone's current position for this frame first) --
+    // O(n^2) but cheap at this scale, capped at CAN_MAX_ALIVE cans.
+    for(var ci = 0; ci < cans3D.length; ci++){
+      for(var cj = ci + 1; cj < cans3D.length; cj++){
+        var ca = cans3D[ci], cb = cans3D[cj];
+        var delta = ca.pos.clone().sub(cb.pos);
+        var dist = delta.length();
+        var minDist = canRadius * 2;
+        if(dist > 0 && dist < minDist){
+          var n = delta.multiplyScalar(1 / dist);
+          var overlap = minDist - dist;
+          ca.pos.addScaledVector(n, overlap / 2);
+          cb.pos.addScaledVector(n, -overlap / 2);
+
+          var closingSpeed = ca.vel.clone().sub(cb.vel).dot(n);
+          if(closingSpeed < 0){
+            var impulse = n.clone().multiplyScalar(-closingSpeed * 0.5);
+            ca.vel.add(impulse);
+            cb.vel.sub(impulse);
+          }
+        }
+      }
     }
   }
 

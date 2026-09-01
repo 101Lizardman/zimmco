@@ -36,4 +36,4 @@ Done with your current machine and want to leave it behind? Simply refresh the p
 
 - Vending machine 3D model by [ZwiebelGames](https://sketchfab.com/3d-models/kiosk-machine-retro-horror-vending-automat-300c0c705eea4c0f9d510021c847646f) on Sketchfab.
 - Sound effects by [Kyodon](https://pixabay.com/sound-effects/film-special-effects-vending-machine-action-61196/) on Pixabay.
-- Voice work by Blair Sist
+- VA by Blair Sist

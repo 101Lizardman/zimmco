@@ -8,7 +8,7 @@ This is the technical README — architecture, local dev, and hosting. Looking f
 
 - **Coin-gated vending** — press the coin slot to arm the machine, then pick a flavour from the pad; only what the current unit's range actually stocks is selectable.
 - **CRT-style display** with a durability gauge and a status light (green idle / fast red blink in Lock Down / solid steel blue while Hacked).
-- **Physics-driven can dispenser** — a vended can falls, bounces once out of the opening, and can be dragged around with the mouse before it's removed.
+- **Physics-driven can dispenser** — a vended can falls, bounces once out of the opening, settles on the floor with friction and a flop to flat, and won't clip through other cans already down there. Cans pile up rather than despawning; once there are more than 100 on the floor, the oldest ones are quietly removed to make room.
 - **Latch mini-game** — clicking the small latch beside the coin slot climbs in pitch; the 15th press jams it, and pulls a random tool from the module's TOOLS table into a slide-out **Recovered Tools** panel.
 - **Alternate-action hotspots** — Hack the Mainframe, Crack It Open (x2, one per side panel), and Proximity Sensor are all real clickable points on the 3D model, each gated behind a click count and (except Crack It Open) an INTELLECT stat check.
 - **Hacked / Internals side panels** — password-gated tiles (Terminal / Transceiver / Shelter / Jump Start) that unlock once the machine is Hacked or Opened respectively; see the main README for the actual passwords and their in-fiction rumors.
