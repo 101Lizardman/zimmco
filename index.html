@@ -1112,6 +1112,40 @@
     src.stop(now + dur + 0.01);
   }
 
+  // Metal bending -- a sawtooth tone sweeping to a random nearby pitch,
+  // through a resonant bandpass for the metallic character, used for the
+  // proximity sensor's wiring hotspot. Same pitch-scaling convention as
+  // Thunk/Metal Crunch.
+  function playMetalBend(pitch){
+    if(!soundEnabled) return;
+    var ctx = ensureAudioCtx();
+    if(!ctx) return;
+    pitch = pitch || 1;
+    var now = ctx.currentTime;
+    var dur = 0.28 + Math.random() * 0.15;
+
+    var osc = ctx.createOscillator();
+    osc.type = "sawtooth";
+    var startFreq = (260 + Math.random() * 80) * pitch;
+    var endFreq = (150 + Math.random() * 350) * pitch; // random bend target, per click
+    osc.frequency.setValueAtTime(startFreq, now);
+    osc.frequency.linearRampToValueAtTime(endFreq, now + dur);
+
+    var filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(800 * pitch, now);
+    filter.Q.setValueAtTime(4, now);
+
+    var gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.22, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+    osc.connect(filter).connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + dur + 0.02);
+  }
+
   // A valve-like "tsshhhhh" steam release for the moment the machine
   // actually gets cracked open: filtered white noise, a quick burst of
   // an attack then a long narrowing hiss as it trails off.
@@ -1246,7 +1280,8 @@
       lockdown: durability===0,
       hacked: false,
       opened: false,
-      sheltered: false
+      sheltered: false,
+      proximityWired: false
     };
     document.getElementById("dispenseCaption").textContent = "— nothing dispensed yet —";
     clearAllCans();
@@ -1279,7 +1314,15 @@
   function setMachineStatus(status){
     if(FORCEABLE_STATES.indexOf(status)===-1) return;
     if(status === "operational") machine.lockdown = false;
-    else if(status === "lockdown") machine.lockdown = true;
+    else if(status === "lockdown"){
+      // Proximity Sensor payoff: only on a fresh entry into Lock Down
+      // (not on re-forcing it while already locked down), and only if
+      // a device is currently wired.
+      if(!machine.lockdown && machine.proximityWired){
+        showResultToast("", "Device Triggered", "The wired device goes off!");
+      }
+      machine.lockdown = true;
+    }
     else if(status === "opened") machine.opened = true; // sticky -- no "un-open"
     else if(status === "hacked") machine.hacked = true; // sticky -- no "un-hack"
     renderStatusIndicators();
@@ -1519,6 +1562,28 @@
       renderStatusIndicators();
       showResultToast("", "Damaged", "Durability reduced by " + effectiveDamage + ".");
     }
+  }
+
+  /* -----------------------------------------------------------------
+   * Proximity Sensor (hotspot #12): wire a device to the machine while
+   * it's NOT in Lock Down. An INTELLECT check decides whether the wiring
+   * takes -- which specific device (buzzer/radio/explosive/etc) is pure
+   * player/GM flavor, not tracked here. Success arms it (sticky for the
+   * rest of this unit); the payoff toast on actually entering Lock Down
+   * later lives in setMachineStatus(). Failure trips Lock Down itself,
+   * immediately, plus damage to the player's tools (flavor only, same
+   * as ZAP's stress/health -- nothing in the Tools tab is touched).
+   * --------------------------------------------------------------- */
+  function openProximitySensorModal(){
+    openStatCheckModal("Proximity Sensor", "Enter INTELLECT stat (+ skill bonuses)", false, function(result, stat){
+      if(result.success){
+        machine.proximityWired = true;
+        showResultToast("dispense-toast--success", "Device Wired", "Rolled " + result.roll + " vs stat " + stat + ".");
+      } else {
+        setMachineStatus("lockdown");
+        showResultToast("dispense-toast--failure", "Wiring Failed", "Your tools are damaged.");
+      }
+    });
   }
 
   function renderStatusIndicators(){
@@ -2158,7 +2223,7 @@
 
   // Small handoff point for the separate 3D-view module script (view3d.js)
   // — it can't reach into this IIFE's closure directly.
-  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: machineStatusLabel, isLockdown: function(){ return machine.lockdown; }, isHacked: function(){ return machine.hacked; }, isOpened: function(){ return machine.opened; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal, openCrackModal: openCrackModal, playThunk: playThunk, playMetalCrunch: playMetalCrunch, zapGate: zapGate };
+  window.ZCMachine = { clearAllCans: clearAllCans, insertCoinAndVend: insertCoinAndVend, pressLatch: pressLatch, isLatchLocked: function(){ return latchLocked; }, getStatus: machineStatusLabel, isLockdown: function(){ return machine.lockdown; }, isHacked: function(){ return machine.hacked; }, isOpened: function(){ return machine.opened; }, setStatus: setMachineStatus, playHackBuzz: playHackBuzz, playZzt: playZzt, openHackModal: openHackModal, openCrackModal: openCrackModal, playThunk: playThunk, playMetalCrunch: playMetalCrunch, playMetalBend: playMetalBend, zapGate: zapGate, isProximityWired: function(){ return machine.proximityWired; }, openProximitySensorModal: openProximitySensorModal };
 
   // 3D is the default view, no on-page control for it. `?classic` in the
   // URL is a dev-only escape hatch back to the DOM/CSS machine (e.g. for
@@ -2223,6 +2288,8 @@
   var HACK_CLICKS_REQUIRED = 5; // clicks on the mainframeHack hotspot before it actually opens
   var crackAttemptClicks = { crackOpenLeft: 0, crackOpenRight: 0 }; // independent per side
   var CRACK_CLICKS_REQUIRED = 10; // clicks on either crack-open hotspot before the modal opens
+  var proximityAttemptClicks = 0;
+  var PROXIMITY_CLICKS_REQUIRED = 10; // clicks on the proximity sensor hotspot before the modal opens
 
   // Two async loads gate the loading screen: the cabinet model and the
   // can pre-warm below. Each calls this once it settles (success or
@@ -3008,6 +3075,32 @@
           crackAttemptClicks[name] = 0;
           window.ZCMachine.openCrackModal();
         });
+      }
+    },
+    {
+      // From hotspots/hotspot-12.json (admin capture) -- a wiring point
+      // for rigging a proximity-triggered device. Takes 10 clicks
+      // (metal-bending SFX, randomly pitched) before the stat-check
+      // modal opens. Only usable while the machine isn't already
+      // locked down; goes inactive once a device is successfully
+      // wired (one at a time).
+      name: "proximitySensor",
+      point: new THREE.Vector3(0.27437, 1.43899, -0.39575),
+      radius: 0.26,
+      active: function(){
+        return !!(window.ZCMachine && !window.ZCMachine.isLockdown() && !window.ZCMachine.isProximityWired());
+      },
+      action: function(){
+        if(!window.ZCMachine) return;
+        proximityAttemptClicks++;
+        var pitch = 0.85 + Math.random() * 0.3;
+        window.ZCMachine.playMetalBend(pitch);
+        if(proximityAttemptClicks < PROXIMITY_CLICKS_REQUIRED){
+          setHint("Fiddling with the wiring… (" + proximityAttemptClicks + "/" + PROXIMITY_CLICKS_REQUIRED + ")");
+          return;
+        }
+        proximityAttemptClicks = 0;
+        window.ZCMachine.openProximitySensorModal();
       }
     }
   ];
