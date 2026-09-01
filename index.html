@@ -687,10 +687,9 @@
 <div id="view3d" hidden>
   <div class="dispense-toasts" id="dispenseToasts" aria-live="polite"></div>
   <div class="view3d__foot">
-    <p class="view3d__hint" id="view3dHint">Drag to orbit · scroll to zoom · click the coin slot to vend</p>
+    <p class="view3d__hint" id="view3dHint">Click the coin slot to vend</p>
     <p class="view3d__credits">
-      <a href="https://shanevincent.itch.io/zimmco-refreshment-beverages" target="_blank" rel="noopener">ZimmCo Refreshment Beverages</a> — a Mothership RPG prop, written by Shane Vincent.<br>
-      Vending machine model by <a href="https://sketchfab.com/3d-models/kiosk-machine-retro-horror-vending-automat-300c0c705eea4c0f9d510021c847646f" target="_blank" rel="noopener">ZwiebelGames</a> · SFX by <a href="https://pixabay.com/sound-effects/film-special-effects-vending-machine-action-61196/" target="_blank" rel="noopener">Kyodon</a>
+      For use with <a href="https://shanevincent.itch.io/zimmco-refreshment-beverages" target="_blank" rel="noopener">ZimmCo Refreshment Beverages</a> · Vending machine model by <a href="https://sketchfab.com/3d-models/kiosk-machine-retro-horror-vending-automat-300c0c705eea4c0f9d510021c847646f" target="_blank" rel="noopener">ZwiebelGames</a> · SFX by <a href="https://pixabay.com/sound-effects/film-special-effects-vending-machine-action-61196/" target="_blank" rel="noopener">Kyodon</a>
     </p>
   </div>
 </div>
@@ -2331,7 +2330,12 @@
   var adminParam = new URLSearchParams(location.search).get("admin");
   var ADMIN_MODE = adminParam === "1" ? true : adminParam === "0" ? false : LOCAL_HOSTS.indexOf(location.hostname) !== -1;
 
-  function setHint(text){ hint.textContent = text; }
+  // No-op by request -- the hint line always just reads "Click the coin
+  // slot to vend" now (set once, in the HTML) instead of following
+  // loading/progress/hotspot-name state like it used to. Left as a
+  // real function (rather than deleting every call site) so nothing
+  // else needs to change.
+  function setHint(text){ /* intentionally does nothing */ }
 
   // Top-centre toast for whatever was just dispensed. Stays up 5s or
   // until closed by hand; stacks if you vend again before it clears.
